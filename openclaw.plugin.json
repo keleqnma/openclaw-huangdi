@@ -1,0 +1,68 @@
+{
+  "id": "huangdi-orchestrator",
+  "name": "Huangdi Orchestrator",
+  "version": "0.1.0",
+  "description": "Multi-agent orchestrator with task decomposition, role-based routing, and memory optimization",
+  "kind": "orchestrator",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "coordinator": {
+        "type": "object",
+        "properties": {
+          "taskDecomposer": {
+            "type": "object",
+            "properties": {
+              "maxDepth": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "complexityThreshold": { "type": "integer", "minimum": 1, "maximum": 10 }
+            }
+          },
+          "circuitBreaker": {
+            "type": "object",
+            "properties": {
+              "mode": { "type": "string", "enum": ["conservative", "moderate", "aggressive"] }
+            }
+          },
+          "retryManager": {
+            "type": "object",
+            "properties": {
+              "mode": { "type": "string", "enum": ["conservative", "moderate", "aggressive"] }
+            }
+          },
+          "timeoutManager": {
+            "type": "object",
+            "properties": {
+              "mode": { "type": "string", "enum": ["short", "standard", "long"] }
+            }
+          }
+        }
+      },
+      "memory": {
+        "type": "object",
+        "properties": {
+          "semanticCache": {
+            "type": "object",
+            "properties": {
+              "size": { "type": "string", "enum": ["small", "medium", "large"] },
+              "similarityThreshold": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "hybridSearch": {
+            "type": "object",
+            "properties": {
+              "mode": { "type": "string", "enum": ["balanced", "precision", "recall"] }
+            }
+          }
+        }
+      },
+      "context": {
+        "type": "object",
+        "properties": {
+          "totalTokenBudget": { "type": "integer", "minimum": 8000 },
+          "enableCompression": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
