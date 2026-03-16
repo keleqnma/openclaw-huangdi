@@ -5,7 +5,7 @@
  * and information retention.
  */
 
-import type { AgentMessage } from "openclaw/plugin-sdk";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { PositionOptimizer, type PositionOptimizerConfig } from "./PositionOptimizer";
 
 export interface ContextLayer {

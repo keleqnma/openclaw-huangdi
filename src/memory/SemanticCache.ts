@@ -226,7 +226,7 @@ export class SemanticCache {
    * Compute embedding for text
    * Override this method to use your preferred embedding model
    */
-  protected async embed(text: string): Promise<number[]> {
+  protected async embed(_text: string): Promise<number[]> {
     // TODO: Implement with actual embedding model
     // For now, return a placeholder
     console.warn('SemanticCache.embed() not implemented - using placeholder');

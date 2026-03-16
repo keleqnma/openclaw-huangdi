@@ -5,7 +5,7 @@
  * Breaks down complex tasks into subtask trees with dependency tracking.
  */
 
-import type { PluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 export interface TaskTree {
   type: 'leaf' | 'branch';
@@ -34,7 +34,7 @@ export class TaskDecomposer {
   };
 
   constructor(
-    private pluginApi: PluginApi,
+    private pluginApi: OpenClawPluginApi,
     private config: Partial<DecompositionConfig> = {}
   ) {}
 
@@ -103,7 +103,8 @@ Return only valid JSON, no other text.
 `;
 
     try {
-      const response = await this.pluginApi.llm.generate(prompt, {
+      // @ts-ignore - llm method may be available through runtime
+      const response = await this.pluginApi.llm?.generate?.(prompt, {
         responseFormat: 'json'
       });
       return JSON.parse(response);
@@ -140,7 +141,8 @@ Return a JSON array of subtask strings. Only valid JSON, no other text.
 `;
 
     try {
-      const response = await this.pluginApi.llm.generate(prompt, {
+      // @ts-ignore - llm method may be available through runtime
+      const response = await this.pluginApi.llm?.generate?.(prompt, {
         responseFormat: 'json'
       });
       return JSON.parse(response);

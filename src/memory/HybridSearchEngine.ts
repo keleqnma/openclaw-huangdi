@@ -50,7 +50,7 @@ export class HybridSearchEngine {
    * Search with hybrid retrieval and RRF fusion
    */
   async search(
-    query: string,
+    _query: string,
     options: {
       vectorResults?: SearchResult[];
       bm25Results?: SearchResult[];
@@ -210,7 +210,7 @@ export class HybridSearchEngine {
    * This is a placeholder - implement with actual cross-encoder
    */
   async rerankWithCrossEncoder(
-    query: string,
+    _query: string,
     results: SearchResult[],
     topK?: number
   ): Promise<SearchResult[]> {

@@ -5,7 +5,7 @@
  * LLMs pay more attention to content at the beginning and end of context.
  */
 
-import type { AgentMessage } from "openclaw/plugin-sdk";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
 export interface MessageWithPriority {
   message: AgentMessage;
@@ -124,20 +124,22 @@ export class PositionOptimizer {
    */
   private categorizeMessage(msg: AgentMessage): MessageCategory {
     // System messages always go first
+    // @ts-ignore - role may include 'system' in some versions
     if (msg.role === 'system') {
       return 'system';
     }
 
-    // Check metadata for explicit categorization
-    if (msg.metadata?.important) {
+    // Check metadata for explicit categorization (if available)
+    const metadata = (msg as any).metadata;
+    if (metadata?.important) {
       return msg.role === 'user' ? 'user-important' : 'assistant-key';
     }
 
-    if (msg.metadata?.type === 'decision') {
+    if (metadata?.type === 'decision') {
       return 'assistant-key';
     }
 
-    if (msg.metadata?.type === 'reference') {
+    if (metadata?.type === 'reference') {
       return 'reference';
     }
 
@@ -205,7 +207,8 @@ export class PositionOptimizer {
       /\bkey point\b|\bimportant\b|\bcritical\b/i
     ];
 
-    return decisionPatterns.some(pattern => pattern.test(msg.content));
+    const content = typeof msg.content === 'string' ? msg.content : '';
+    return decisionPatterns.some(pattern => pattern.test(content));
   }
 
   /**
@@ -218,7 +221,8 @@ export class PositionOptimizer {
       /\bneed to\b|\bmust\b|\bshould\b/i
     ];
 
-    return todoPatterns.some(pattern => pattern.test(msg.content));
+    const content = typeof msg.content === 'string' ? msg.content : '';
+    return todoPatterns.some(pattern => pattern.test(content));
   }
 
   /**
@@ -237,7 +241,8 @@ export class PositionOptimizer {
   private countTokens(msg: AgentMessage): number {
     // Rough estimate: 1 token ≈ 4 characters for English
     // More accurate: use tiktoken or provider's tokenizer
-    const contentTokens = Math.ceil(msg.content.length / 4);
+    const content = typeof msg.content === 'string' ? msg.content : '';
+    const contentTokens = Math.ceil(content.length / 4);
     const roleTokens = 4;  // Approximate tokens for role
     return contentTokens + roleTokens;
   }

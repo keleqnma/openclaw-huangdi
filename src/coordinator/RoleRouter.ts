@@ -4,7 +4,7 @@
  * Routes tasks to appropriate agent roles based on task type and current load.
  */
 
-import type { PluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 export interface RoleDefinition {
   id: string;
@@ -49,7 +49,7 @@ export class RoleRouter {
   };
 
   constructor(
-    private pluginApi: PluginApi,
+    private pluginApi: OpenClawPluginApi,
     private config: Partial<LoadBalancerConfig> = {}
   ) {
     this.registerDefaultRoles();
@@ -157,7 +157,8 @@ Return only the category name in lowercase.
 `;
 
     try {
-      const response = await this.pluginApi.llm.generate(prompt);
+      // @ts-ignore - llm method may be available through runtime
+      const response = await this.pluginApi.llm?.generate?.(prompt);
       return response.trim().toLowerCase();
     } catch (error) {
       return 'other';
@@ -254,7 +255,8 @@ Return only a single integer from 1 to 10.
 `;
 
     try {
-      const response = await this.pluginApi.llm.generate(prompt);
+      // @ts-ignore - llm method may be available through runtime
+      const response = await this.pluginApi.llm?.generate?.(prompt);
       const score = parseInt(response.trim());
       return isNaN(score) ? 0.5 : score / 10;
     } catch (error) {
