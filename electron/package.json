@@ -1,0 +1,12 @@
+{
+  "name": "huangdi-electron-app",
+  "version": "0.2.0",
+  "description": "Multi-Agent Dashboard Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": ["electron", "dashboard", "multi-agent"],
+  "author": "OpenClaw Team",
+  "license": "MIT"
+}
