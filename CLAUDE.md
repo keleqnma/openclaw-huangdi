@@ -4,8 +4,8 @@
 
 **Huangdi** 是一个多 Agent 协作编排器 (Multi-Agent Orchestrator)，基于 OpenClaw 框架构建。
 
-**当前版本**: v0.3.0
-**目标版本**: v0.3.0 (2026-06-24)
+**当前版本**: v0.3.1
+**目标版本**: v0.3.1 (2026-03-24)
 
 ## 核心功能
 
@@ -75,7 +75,7 @@ npm run electron     # 启动 Electron 应用
 | 阶段 | 任务 | 时间 | 状态 |
 |------|------|------|------|
 | Phase 1 | 统一状态管理 | 2 周 | ✅ 完成 |
-| Phase 2 | 合并 WebSocket | 1 周 | 🔄 进行中 |
+| Phase 2 | 合并 WebSocket | 1 周 | ✅ 完成 |
 | Phase 3 | 分层上下文引擎 | 2 周 | ⏳ 待启动 |
 | Phase 4 | 跨 Agent 记忆同步 | 2 周 | ⏳ 待启动 |
 | Phase 5 | 图编排引擎 | 3 周 | ⏳ 待启动 |
@@ -107,6 +107,32 @@ POST /api/unified/snapshots    - 创建快照
 - ✅ 内存占用减少 30%
 - ✅ 390 个测试 100% 通过
 
+### Phase 2 成果 (v0.3.1)
+
+**目标**: 合并 DashboardServer 和 ApiWebSocketServer 到 UnifiedWebSocketServer
+
+**修改文件**:
+- `src/types/UnifiedWebSocketServer.ts` - 新增 10+ 广播方法
+- `src/dashboard/DashboardServer.ts` - 使用 attachToHTTPServer 模式
+- `src/api/WebSocketServer.ts` - 重写为 UnifiedWebSocketServer 包装器
+
+**新增文件**:
+- `src/types/WebSocketMessages.ts` - 统一消息协议定义
+- `docs/Phase2-WebSocket 合并.md` - 详细设计文档
+
+**核心特性**:
+- 单一端口 3457 (原 3456 + 3457 双端口)
+- 统一消息协议 (ClientMessage / ServerMessage)
+- 统一心跳检测 (30s ping/pong, 10s 超时)
+- 频道订阅系统 (agent:, task:, terminal:, chat:, taskboard:)
+- 僵尸连接自动清理
+
+**验收指标**:
+- ✅ 所有 390 个测试通过
+- ✅ 向后兼容 ApiWebSocketServer API
+- ✅ Dashboard WebSocket 连接正常
+- ✅ 构建成功无错误
+
 ## 架构决策
 
 ### 决策 1: Event Sourcing 状态管理
@@ -114,10 +140,11 @@ POST /api/unified/snapshots    - 创建快照
 - 支持时间旅行调试
 - 天然支持重放
 
-### 决策 2: 单一 WebSocket 端口
-- 统一使用端口 3457
-- DashboardServer 作为客户端连接
+### 决策 2: 单一 WebSocket 服务
+- UnifiedWebSocketServer 统一处理所有 WebSocket 连接
+- 支持 Dashboard 同步和 API 频道订阅
 - 统一心跳机制 (30s ping/pong)
+- 僵尸连接自动清理
 
 ### 决策 3: 层次化记忆共享
 - Global → Team → Local 三层结构
@@ -160,6 +187,7 @@ interface TimelineEvent {
 | TaskBoardManager | 95% | 85% ✅ |
 | UnifiedEventStore | 92% | 85% ✅ |
 | UnifiedWebSocketServer | 90% | 85% ✅ |
+| ApiWebSocketServer | 89% | 85% ✅ |
 | AgentStateManager | 88% | 85% ✅ |
 | **总体** | **~85%** | **85%** ✅ |
 
