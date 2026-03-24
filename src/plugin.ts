@@ -5,21 +5,30 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { DashboardServer } from './dashboard/DashboardServer';
 import type { DashboardEvent, RoleId } from './dashboard/types';
+import { HierarchicalContextEngine, createHierarchicalContext } from './context/HierarchicalContextEngine';
+import { CrossAgentMemoryRouter, createMemoryRouter } from './memory/CrossAgentMemoryRouter';
+import { SemanticCache } from './memory/SemanticCache';
 
 /**
- * Huangdi Orchestrator Plugin
+ * Huangdi Orchestrator Plugin Class
  */
-const plugin = {
-  id: 'huangdi-orchestrator',
-  name: 'Huangdi Orchestrator',
-  description: 'Multi-agent orchestrator with task decomposition, role-based routing, and memory optimization',
+class HuangdiPlugin {
+  id = 'huangdi-orchestrator';
+  name = 'Huangdi Orchestrator';
+  description = 'Multi-agent orchestrator with task decomposition, role-based routing, and memory optimization';
+
+  // Context and Memory management
+  private contextEngine: HierarchicalContextEngine | null = null;
+  private memoryRouter: CrossAgentMemoryRouter | null = null;
+  private semanticCache: SemanticCache | null = null;
+  private dashboardServer: DashboardServer | null = null;
 
   /**
    * Plugin registration
    */
   register(api: OpenClawPluginApi) {
     api.logger.info('Huangdi Orchestrator registered');
-  },
+  }
 
   /**
    * Plugin activation
@@ -29,13 +38,26 @@ const plugin = {
 
     logger.info('Huangdi Orchestrator activating...');
 
+    // Initialize Context and Memory systems
+    this.contextEngine = createHierarchicalContext('medium');
+    this.memoryRouter = createMemoryRouter('medium');
+    this.semanticCache = new SemanticCache({
+      maxSize: 500,
+      similarityThreshold: 0.9,
+      defaultTtl: 3600000,
+      embeddingDimension: 384
+    });
+
+    // Inject Memory API into runtime (type-safe)
+    this.injectMemoryApi(api);
+
     // Initialize Dashboard Server
-    const dashboardServer = new DashboardServer(3456, 1000, 2000);
-    dashboardServer.setApi(api);
+    this.dashboardServer = new DashboardServer(3456, 1000, 2000);
+    this.dashboardServer.setApi(api);
 
     try {
-      const port = await dashboardServer.start();
-      dashboardServer.createWebSocketServer();
+      const port = await this.dashboardServer.start();
+      this.dashboardServer.createWebSocketServer();
       logger.info(`Dashboard server started on http://localhost:${port}`);
     } catch (error) {
       logger.error(`Failed to start Dashboard server: ${error}`);
@@ -45,8 +67,10 @@ const plugin = {
     api.on("subagent_spawning", async (event) => {
       logger.debug?.('Subagent spawning');
 
+      if (!this.dashboardServer) return;
+
       // Create agent in spawning state
-      const agentManager = dashboardServer.getAgentManager();
+      const agentManager = this.dashboardServer.getAgentManager();
       const agent = agentManager.addSpawningAgent(event.childSessionKey, event.childSessionKey);
 
       // Broadcast spawning event
@@ -57,7 +81,7 @@ const plugin = {
         agentId: event.childSessionKey,
         payload: { spawningStatus: 'spawning' },
       };
-      dashboardServer.broadcastEvent(spawnEvent);
+      this.dashboardServer.broadcastEvent(spawnEvent);
 
       logger.info(`Agent ${event.childSessionKey} spawning (${agent.roleId})`);
     });
@@ -65,7 +89,9 @@ const plugin = {
     api.on("subagent_spawned", async (event) => {
       logger.debug?.('Subagent spawned');
 
-      const agentManager = dashboardServer.getAgentManager();
+      if (!this.dashboardServer) return;
+
+      const agentManager = this.dashboardServer.getAgentManager();
       const agent = agentManager.getAgent(event.childSessionKey);
 
       if (agent) {
@@ -83,7 +109,7 @@ const plugin = {
           agentId: event.childSessionKey,
           payload: { roleId, task: event.label },
         };
-        dashboardServer.broadcastEvent(spawnedEvent);
+        this.dashboardServer.broadcastEvent(spawnedEvent);
 
         logger.info(`Agent ${event.childSessionKey} spawned as ${roleId}`);
       }
@@ -92,7 +118,9 @@ const plugin = {
     api.on("subagent_ended", async (event) => {
       logger.debug?.('Subagent ended');
 
-      const agentManager = dashboardServer.getAgentManager();
+      if (!this.dashboardServer) return;
+
+      const agentManager = this.dashboardServer.getAgentManager();
       const agent = agentManager.getAgent(event.targetSessionKey);
 
       if (agent) {
@@ -129,7 +157,7 @@ const plugin = {
             error: event.error,
           },
         };
-        dashboardServer.broadcastEvent(endedEvent);
+        this.dashboardServer.broadcastEvent(endedEvent);
 
         logger.info(`Agent ${event.targetSessionKey} ended (${event.outcome})`);
       }
@@ -138,8 +166,32 @@ const plugin = {
     // Register before_prompt_build hook for memory injection
     api.on("before_prompt_build", async (event) => {
       try {
-        // @ts-ignore - memory may not be defined in all runtime types
-        const memories = await api.runtime.memory?.search?.(event.prompt, { limit: 5 });
+        // Get agent ID from event
+        const agentId = (event as any).agentId || `agent_${Date.now()}`;
+
+        // Set agent context in context engine
+        if (this.contextEngine) {
+          this.contextEngine.setAgentContext(agentId);
+        }
+
+        // Search memories with fallback strategy
+        let memories: any[] = [];
+
+        if (this.contextEngine) {
+          // Primary: Use context engine search
+          memories = await this.contextEngine.searchMemories(event.prompt, {
+            limit: 5,
+            agentId
+          });
+        } else if (this.memoryRouter) {
+          // Fallback: Use memory router
+          const results = await this.memoryRouter.query(agentId, event.prompt, 'all', 5);
+          memories = results.flatMap(r => r.memories);
+        } else if (api.runtime.memory?.search) {
+          // Final fallback: Use runtime memory if available
+          // @ts-ignore - memory may not be defined in all runtime types
+          memories = await api.runtime.memory.search(event.prompt, { limit: 5 });
+        }
 
         if (memories && memories.length > 0) {
           const contextText = memories
@@ -151,7 +203,7 @@ const plugin = {
           };
         }
       } catch (error) {
-        logger.warn(`Memory search failed: ${error}`);
+        logger.warn(`Memory injection failed: ${error}`);
       }
 
       return undefined;
@@ -159,7 +211,88 @@ const plugin = {
 
     logger.info('Huangdi Orchestrator activated');
   }
-};
+
+  /**
+   * Inject type-safe Memory API into OpenClaw runtime
+   */
+  private injectMemoryApi(api: OpenClawPluginApi) {
+    const self = this;
+
+    // Extend the runtime with memory capabilities
+    (api.runtime as any).memory = {
+      /**
+       * Search memories
+       */
+      async search(query: string, options?: {
+        limit?: number;
+        scope?: 'local' | 'team' | 'global' | 'all';
+        agentId?: string;
+      }) {
+        if (self.contextEngine) {
+          return self.contextEngine.searchMemories(query, {
+            limit: options?.limit,
+            scope: options?.scope,
+            agentId: options?.agentId
+          });
+        }
+        if (self.memoryRouter) {
+          const results = await self.memoryRouter.query(
+            options?.agentId || '',
+            query,
+            options?.scope || 'all',
+            options?.limit || 10
+          );
+          return results.flatMap(r => r.memories);
+        }
+        return [];
+      },
+
+      /**
+       * Add a memory
+       */
+      async add(content: string, metadata?: {
+        agentId?: string;
+        taskId?: string;
+        teamId?: string;
+        importance?: number;
+        tags?: string[];
+      }) {
+        if (self.memoryRouter) {
+          return self.memoryRouter.addMemory(
+            metadata?.agentId || 'default',
+            content,
+            {
+              source: 'plugin',
+              agentId: metadata?.agentId,
+              taskId: metadata?.taskId,
+              teamId: metadata?.teamId,
+              timestamp: Date.now(),
+              importance: metadata?.importance ?? 0.5,
+              tags: metadata?.tags
+            }
+          );
+        }
+        return '';
+      },
+
+      /**
+       * Get context for an agent
+       */
+      async getContext(agentId: string) {
+        if (self.contextEngine) {
+          self.contextEngine.setAgentContext(agentId);
+          return self.contextEngine.getOptimizedContext();
+        }
+        return [];
+      }
+    };
+  }
+}
+
+/**
+ * Plugin instance
+ */
+const plugin = new HuangdiPlugin();
 
 /**
  * Detect role ID from task/label description

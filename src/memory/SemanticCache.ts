@@ -23,6 +23,8 @@ export interface SemanticCacheConfig {
   defaultTtl: number;
   /** Enable LRU eviction */
   enableLruEviction: boolean;
+  /** Embedding dimension */
+  embeddingDimension: number;
 }
 
 /**
@@ -33,10 +35,16 @@ export interface SemanticCacheConfig {
  * - Configurable similarity threshold
  * - LRU eviction when cache is full
  * - TTL-based expiration
+ *
+ * Embedding options:
+ * - Use @xenova/transformers for local embedding
+ * - Override embed() method for custom embedding provider
  */
 export class SemanticCache {
   private cache = new Map<string, CacheEntry>();
   private config: SemanticCacheConfig;
+  private embeddingModel?: any;
+  private embeddingModelLoaded = false;
 
   constructor(config?: Partial<SemanticCacheConfig>) {
     this.config = {
@@ -44,6 +52,7 @@ export class SemanticCache {
       similarityThreshold: 0.95,
       defaultTtl: 3600000,  // 1 hour
       enableLruEviction: true,
+      embeddingDimension: 384,  // MiniLM-L6-v2 dimension
       ...config
     };
   }
@@ -224,13 +233,41 @@ export class SemanticCache {
 
   /**
    * Compute embedding for text
+   * Uses @xenova/transformers for local embedding computation
    * Override this method to use your preferred embedding model
    */
-  protected async embed(_text: string): Promise<number[]> {
-    // TODO: Implement with actual embedding model
-    // For now, return a placeholder
-    console.warn('SemanticCache.embed() not implemented - using placeholder');
-    return new Array(1536).fill(0);
+  protected async embed(text: string): Promise<number[]> {
+    // Lazy load the embedding model
+    if (!this.embeddingModelLoaded) {
+      try {
+        const { pipeline } = await import('@xenova/transformers');
+        this.embeddingModel = await pipeline(
+          'feature-extraction',
+          'Xenova/all-MiniLM-L6-v2',
+          { quantized: true }
+        );
+        this.embeddingModelLoaded = true;
+      } catch (error) {
+        console.warn('Failed to load embedding model, using fallback:', error);
+        this.embeddingModelLoaded = true; // Mark as loaded to avoid retry
+      }
+    }
+
+    // Compute embedding with loaded model
+    if (this.embeddingModel) {
+      try {
+        const result = await this.embeddingModel(text, {
+          pooling: 'mean',
+          normalize: true
+        });
+        return Array.from(result.data) as number[];
+      } catch (error) {
+        console.warn('Embedding computation failed, using fallback:', error);
+      }
+    }
+
+    // Fallback: return zero vector
+    return new Array(this.config.embeddingDimension).fill(0);
   }
 }
 
