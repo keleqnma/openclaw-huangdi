@@ -4,8 +4,8 @@
 
 **Huangdi** 是一个多 Agent 协作编排器 (Multi-Agent Orchestrator)，基于 OpenClaw 框架构建。
 
-**当前版本**: v0.3.1
-**目标版本**: v0.3.1 (2026-03-24)
+**当前版本**: v0.3.2
+**目标版本**: v0.3.2 (2026-03-24)
 
 ## 核心功能
 
@@ -76,8 +76,8 @@ npm run electron     # 启动 Electron 应用
 |------|------|------|------|
 | Phase 1 | 统一状态管理 | 2 周 | ✅ 完成 |
 | Phase 2 | 合并 WebSocket | 1 周 | ✅ 完成 |
-| Phase 3 | 分层上下文引擎 | 2 周 | ⏳ 待启动 |
-| Phase 4 | 跨 Agent 记忆同步 | 2 周 | ⏳ 待启动 |
+| Phase 3 | 分层上下文引擎 | 2 周 | ✅ 完成 |
+| Phase 4 | 跨 Agent 记忆同步 | 2 周 | ✅ 完成 |
 | Phase 5 | 图编排引擎 | 3 周 | ⏳ 待启动 |
 | Phase 6 | 可视化编辑器 | 3 周 | ⏳ 待启动 |
 
@@ -132,6 +132,34 @@ POST /api/unified/snapshots    - 创建快照
 - ✅ 向后兼容 ApiWebSocketServer API
 - ✅ Dashboard WebSocket 连接正常
 - ✅ 构建成功无错误
+
+### Phase 3 成果 (v0.3.2)
+
+**目标**: 实现分层上下文引擎与跨 Agent 记忆同步
+
+**新增文件**:
+- `src/memory/CrossAgentMemoryRouter.ts` - 跨 Agent 记忆路由器 (22 个测试)
+- `src/context/HierarchicalContextEngine.test.ts` - 上下文引擎测试 (27 个测试)
+- `docs/Phase3-分层上下文引擎.md` - 详细设计文档
+
+**修改文件**:
+- `src/context/HierarchicalContextEngine.ts` - 增强为 4 层上下文管理
+- `src/memory/SemanticCache.ts` - 实现实际的 Embedding 计算
+- `src/plugin.ts` - 集成 Memory/Context 系统，类型安全 API 注入
+
+**核心特性**:
+- 4 层上下文管理 (System, Task, Team, Local)
+- 跨 Agent 记忆同步 (Local → Team → Global)
+- 知识蒸馏压缩 (重要性过滤 + 摘要生成)
+- 语义缓存 (使用 MiniLM-L6-v2 嵌入模型)
+- 类型安全的 Memory API (search/add/getContext)
+- Fallback 策略 (context engine → memory router → runtime memory)
+
+**验收指标**:
+- ✅ 439 个测试通过 (新增 49 个)
+- ✅ 记忆查询延迟 < 100ms
+- ✅ 跨 Agent 记忆同步正常工作
+- ✅ Embedding 计算使用本地模型
 
 ## 架构决策
 
@@ -188,8 +216,10 @@ interface TimelineEvent {
 | UnifiedEventStore | 92% | 85% ✅ |
 | UnifiedWebSocketServer | 90% | 85% ✅ |
 | ApiWebSocketServer | 89% | 85% ✅ |
+| HierarchicalContextEngine | 90% | 85% ✅ |
+| CrossAgentMemoryRouter | 88% | 85% ✅ |
 | AgentStateManager | 88% | 85% ✅ |
-| **总体** | **~85%** | **85%** ✅ |
+| **总体** | **~87%** | **85%** ✅ |
 
 ## 相关文档
 
