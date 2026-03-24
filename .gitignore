@@ -15,6 +15,7 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Logs
 logs/
@@ -32,3 +33,18 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# Build releases
+release/
+
+# Backup files
+*-backup.html
+*.bak
+
+# Package locks (keep only pnpm-lock.yaml)
+package-lock.json
+yarn.lock
+
+# Electron builder
+*.yml
+electron/icon.svg

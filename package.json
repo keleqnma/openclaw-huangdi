@@ -1,68 +1,94 @@
 {
   "name": "@openclaw/huangdi-orchestrator",
-  "version": "0.1.0",
-  "description": "Multi-agent orchestrator plugin for OpenClaw with task decomposition, role-based routing, and memory optimization",
+  "version": "0.2.0",
+  "description": "Multi-agent orchestrator plugin for OpenClaw with task decomposition, role-based routing, and memory optimization. Extended with Terminal Multi-Agent Service.",
   "type": "module",
+  "bin": {
+    "multi-agent-service": "./dist/cli.js"
+  },
   "openclaw": {
-    "extensions": ["./dist/plugin.js"]
+    "extensions": [
+      "./dist/plugin.js"
+    ]
   },
-  "main": "./dist/plugin.js",
-  "types": "./dist/plugin.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./plugin": {
-      "import": "./dist/plugin.js",
-      "types": "./dist/plugin.d.ts"
-    },
-    "./coordinator": {
-      "import": "./dist/coordinator/index.js",
-      "types": "./dist/coordinator/index.d.ts"
-    },
-    "./memory": {
-      "import": "./dist/memory/index.js",
-      "types": "./dist/memory/index.d.ts"
-    },
-    "./context": {
-      "import": "./dist/context/index.js",
-      "types": "./dist/context/index.d.ts"
-    }
-  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "openclaw.plugin.json",
-    "README.md"
+    "README.md",
+    "config.example.json",
+    "electron"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/add-import-extensions.js",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "start": "node dist/cli.js start",
+    "start:service": "node dist/bin/start-service.js",
+    "electron": "node scripts/run-electron.js",
+    "electron:dev": "npm run build && npm run electron",
+    "app:build": "npm run build && electron-builder --win",
+    "app:pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.openclaw.huangdi",
+    "productName": "Multi-Agent Dashboard",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "electron/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "keywords": [
     "openclaw",
     "plugin",
     "orchestrator",
     "multi-agent",
-    "llm"
+    "llm",
+    "terminal",
+    "sandbox",
+    "agent-service"
   ],
   "author": "OpenClaw Team",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
     "@vitest/coverage-v8": "^2.1.0",
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "wait-on": "^9.0.4"
   },
   "peerDependencies": {
     "openclaw": ">=2026.2.0"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.58.3"
+    "@hono/node-server": "^1.19.11",
+    "@lydell/node-pty": "^1.1.0",
+    "@mariozechner/pi-agent-core": "^0.58.3",
+    "commander": "^12.1.0",
+    "hono": "^4.12.8",
+    "ws": "^8.19.0"
   }
 }

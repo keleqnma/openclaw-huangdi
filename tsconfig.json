@@ -16,12 +16,24 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": [
+    "src/agent/**/*.ts",
+    "src/terminal/**/*.ts",
+    "src/sandbox/**/*.ts",
+    "src/api/**/*.ts",
+    "src/service/**/*.ts",
+    "src/task/**/*.ts",
+    "src/types/**/*.ts",
+    "src/index.ts",
+    "src/cli.ts",
+    "src/bin/**/*.ts",
+    "src/dashboard/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "src/coordinator", "src/memory", "src/context", "src/plugin.ts", "src/**/*.test.ts", "electron"]
 }

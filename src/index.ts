@@ -1,39 +1,45 @@
 /**
- * Huangdi Orchestrator - Public API
+ * Huangdi Orchestrator - Terminal Multi-Agent Service
  *
- * Multi-agent orchestrator plugin for OpenClaw with task decomposition,
- * role-based routing, and memory optimization.
+ * 本地跨平台终端多 Agent 服务
  */
 
-// Coordinator exports
-export { TaskDecomposer } from './coordinator/TaskDecomposer';
-export type { TaskTree, DecompositionConfig } from './coordinator/TaskDecomposer';
+// Terminal exports
+export { TerminalService } from './terminal/TerminalService';
+export { ProcessRegistry } from './terminal/ProcessRegistry';
+export type * from './terminal/types';
 
-export { RoleRouter } from './coordinator/RoleRouter';
-export type { RoleDefinition, AgentLoad, RoleAssignment, LoadBalancerConfig } from './coordinator/RoleRouter';
+// Sandbox exports
+export { SandboxManager } from './sandbox/SandboxManager';
+export { PathSecurity } from './sandbox/PathSecurity';
+export { CommandSecurity } from './sandbox/CommandSecurity';
+export type * from './sandbox/types';
 
-export { CircuitBreaker, CircuitOpenError, createCircuitBreaker } from './coordinator/CircuitBreaker';
-export type { CircuitBreakerConfig } from './coordinator/CircuitBreaker';
+// Agent exports
+export { AgentOrchestrator } from './agent/AgentOrchestrator';
 
-export { RetryManager, MaxRetriesExceededError, TimeoutError, createRetryManager } from './coordinator/RetryManager';
-export type { RetryConfig, RetryState } from './coordinator/RetryManager';
+// Task exports (explicitly re-export to avoid conflicts)
+export { TaskBoardManager } from './task/TaskBoardManager';
+export { MonitorAgent } from './task/MonitorAgent';
+export type {
+  Task,
+  TaskStatus,
+  TaskPriority,
+  TaskMessage,
+  TaskMessageType,
+  TaskBoard,
+  TaskFilter,
+  CreateTaskParams,
+} from './task/types';
 
-export { TimeoutManager, TimeoutExceededError, createTimeoutManager } from './coordinator/TimeoutManager';
-export type { TimeoutConfig, TimeoutState } from './coordinator/TimeoutManager';
+// API exports
+export { createRoutes } from './api/routes';
+export { createTaskBoardRoutes } from './api/taskRoutes';
+export { ApiWebSocketServer } from './api/WebSocketServer';
 
-// Memory exports
-export { SemanticCache, createSemanticCache } from './memory/SemanticCache';
-export type { CacheEntry, SemanticCacheConfig } from './memory/SemanticCache';
-
-export { HybridSearchEngine, createHybridSearchEngine } from './memory/HybridSearchEngine';
-export type { SearchResult, HybridSearchConfig } from './memory/HybridSearchEngine';
-
-// Context exports
-export { HierarchicalContextEngine, createHierarchicalContext } from './context/HierarchicalContextEngine';
-export type { ContextLayer, HierarchicalContextConfig, ContextSnapshot } from './context/HierarchicalContextEngine';
-
-export { PositionOptimizer } from './context/PositionOptimizer';
-export type { MessageWithPriority, MessageCategory, PositionOptimizerConfig } from './context/PositionOptimizer';
+// Service exports
+export { MultiAgentService } from './service/MultiAgentService';
+export type { MultiAgentServiceConfig } from './service/MultiAgentService';
 
 // Version
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';

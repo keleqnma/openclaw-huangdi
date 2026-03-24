@@ -538,6 +538,13 @@
       color: white;
     }
 
+    .btn-danger:hover { background: #f85149; }
+
+    .btn-danger {
+      background: var(--accent-red);
+      color: white;
+    }
+
     .btn-danger:hover { background: #ff6b6b; }
 
     /* 空状态 */
@@ -727,6 +734,61 @@
         display: none;
       }
     }
+
+    /* 终端输出样式 */
+    .terminal-output {
+      background: #0d1117;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 15px;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #c9d1d9;
+      height: calc(100vh - 250px);
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .terminal-output .command {
+      color: #58a6ff;
+    }
+
+    .terminal-output .output {
+      color: #c9d1d9;
+    }
+
+    .terminal-output .error {
+      color: #f85149;
+    }
+
+    .terminal-output .system {
+      color: #8b949e;
+      font-style: italic;
+    }
+
+    .terminal-input-area {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .terminal-input-area input {
+      flex: 1;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--text-primary);
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    .terminal-input-area input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
   </style>
 </head>
 <body>
@@ -782,6 +844,26 @@
             <div class="icon">🤖</div>
             <div>No active agents. Click "New Agent" to create one.</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Agent Terminal 面板 -->
+      <div id="panel-agent-terminal" class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn btn-secondary" onclick="showAgentsList()">← Back</button>
+            <h2 style="font-size: 16px;" id="terminalAgentName">Agent Terminal</h2>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-primary" id="startAgentBtn" onclick="startSelectedAgent()">▶️ Start</button>
+            <button class="btn btn-danger" id="stopAgentBtn" onclick="stopSelectedAgent()">⏹️ Stop</button>
+            <button class="btn btn-secondary" onclick="clearTerminal()">🗑️ Clear</button>
+          </div>
+        </div>
+        <div id="terminalOutput" class="terminal-output"></div>
+        <div class="terminal-input-area">
+          <input type="text" id="terminalInput" placeholder="Type command... (press Enter to send)" onkeypress="handleTerminalKeyPress(event)">
+          <button class="btn btn-primary" onclick="sendTerminalCommand()">Send</button>
         </div>
       </div>
 
@@ -1057,23 +1139,33 @@
       }
 
       container.innerHTML = agents.map(agent => {
-        const status = getAgentStatus(agent.id || agent.runId);
-        const initial = (agent.id || agent.runId || '').charAt(0).toUpperCase();
+        const status = agent.status || 'idle';
+        const initial = (agent.id || '').charAt(0).toUpperCase();
+        const isRunning = status === 'running' || agent.pid;
 
         return `
           <div class="task-card">
             <div class="task-card-header">
               <div style="display: flex; gap: 10px; align-items: center;">
-                <div class="agent-avatar" style="background: ${getAvatarColor(agent.id || agent.runId)}">${initial}</div>
+                <div class="agent-avatar" style="background: ${getAvatarColor(agent.id)}">${initial}</div>
                 <div>
-                  <div class="task-card-title">${escapeHtml(agent.id || agent.runId)}</div>
-                  <div style="font-size: 12px; color: var(--text-secondary);">${agent.role || 'Agent'}</div>
+                  <div class="task-card-title">${escapeHtml(agent.id)}</div>
+                  <div style="font-size: 12px; color: var(--text-secondary);">${agent.config?.role || agent.role || 'Agent'}</div>
                 </div>
               </div>
-              <span class="task-card-badge">${status.status}</span>
+              <span class="task-card-badge" style="background: ${isRunning ? 'var(--accent-green)' : 'var(--bg-tertiary)'}">
+                ${isRunning ? 'Running' : status}
+              </span>
             </div>
-            <div class="task-card-meta">
-              <span>ID: ${escapeHtml(agent.id || agent.runId)}</span>
+            <div class="task-card-meta" style="display: flex; gap: 8px; margin-top: 10px;">
+              <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px;" onclick="event.stopPropagation(); openAgentTerminal('${escapeHtml(agent.id)}')">
+                📟 Terminal
+              </button>
+              ${isRunning
+                ? `<button class="btn btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick="event.stopPropagation(); stopAgent('${escapeHtml(agent.id)}')">⏹️ Stop</button>`
+                : `<button class="btn btn-primary" style="font-size: 11px; padding: 4px 8px;" onclick="event.stopPropagation(); startAgent('${escapeHtml(agent.id)}')">▶️ Start</button>`
+              }
+              <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px;" onclick="event.stopPropagation(); deleteAgent('${escapeHtml(agent.id)}')">🗑️</button>
             </div>
           </div>
         `;
@@ -1145,6 +1237,7 @@
             role,
             command: command || 'claude',
             cwd: cwd || `./workspaces/${id}`,
+            autoStart: false,  // 创建时不自动启动，让用户手动控制
           }),
         });
 
@@ -1158,6 +1251,166 @@
         }
       } catch (e) {
         showNotification(`Failed to create agent: ${e.message}`, 'error');
+      }
+    }
+
+    // ==================== Agent 控制 ====================
+    async function startAgent(agentId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/agents/${agentId}/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showNotification(`Agent "${agentId}" started`, 'success');
+          refreshAgents();
+        } else {
+          showNotification(`Failed to start agent: ${data.error || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        showNotification(`Failed to start agent: ${e.message}`, 'error');
+      }
+    }
+
+    async function stopAgent(agentId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/agents/${agentId}/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showNotification(`Agent "${agentId}" stopped`, 'success');
+          refreshAgents();
+        } else {
+          showNotification(`Failed to stop agent: ${data.error || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        showNotification(`Failed to stop agent: ${e.message}`, 'error');
+      }
+    }
+
+    async function deleteAgent(agentId) {
+      if (!confirm(`Are you sure you want to delete agent "${agentId}"?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/agents/${agentId}`, {
+          method: 'DELETE',
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showNotification(`Agent "${agentId}" deleted`, 'success');
+          refreshAgents();
+        } else {
+          showNotification(`Failed to delete agent: ${data.error || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        showNotification(`Failed to delete agent: ${e.message}`, 'error');
+      }
+    }
+
+    // ==================== 终端模拟器 ====================
+    let currentTerminalAgent = null;
+    let terminalOutputBuffer = [];
+
+    function openAgentTerminal(agentId) {
+      currentTerminalAgent = agentId;
+      switchTab('agent-terminal');
+      document.getElementById('terminalAgentName').textContent = `Agent: ${agentId}`;
+      document.getElementById('terminalOutput').innerHTML = '<span class="system">Connecting to agent terminal...</span>';
+      loadTerminalOutput(agentId);
+    }
+
+    function showAgentsList() {
+      switchTab('agents');
+      currentTerminalAgent = null;
+    }
+
+    async function loadTerminalOutput(agentId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/agents/${agentId}/output?lines=200`);
+        const data = await res.json();
+
+        if (res.ok && data.output) {
+          renderTerminalOutput(data.output);
+        } else {
+          document.getElementById('terminalOutput').innerHTML = '<span class="system">No output available. Start the agent to see output.</span>';
+        }
+      } catch (e) {
+        console.error('Failed to load terminal output:', e);
+        document.getElementById('terminalOutput').innerHTML = '<span class="error">Failed to load terminal output</span>';
+      }
+    }
+
+    function renderTerminalOutput(output) {
+      const container = document.getElementById('terminalOutput');
+      // 简单转义 HTML
+      const escaped = escapeHtml(output);
+      container.innerHTML = `<div class="output">${escaped}</div>`;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function clearTerminal() {
+      document.getElementById('terminalOutput').innerHTML = '<span class="system">Terminal cleared</span>';
+    }
+
+    async function sendTerminalCommand() {
+      const input = document.getElementById('terminalInput');
+      const command = input.value.trim();
+
+      if (!command) return;
+
+      if (!currentTerminalAgent) {
+        showNotification('No agent selected', 'error');
+        return;
+      }
+
+      try {
+        // 首先获取会话 ID
+        const sessionRes = await fetch(`${API_BASE}/api/agents/${currentTerminalAgent}/session`);
+        const sessionData = await sessionRes.json();
+
+        if (!sessionData.session) {
+          showNotification('Agent session not found. Start the agent first.', 'error');
+          return;
+        }
+
+        const sessionId = sessionData.session.id;
+
+        // 发送命令
+        const res = await fetch(`${API_BASE}/api/terminals/${sessionId}/write`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: command + '\\n' }),
+        });
+
+        if (res.ok) {
+          // 在终端显示命令
+          const container = document.getElementById('terminalOutput');
+          container.innerHTML += `<div class="command">$ ${escapeHtml(command)}</div>`;
+          input.value = '';
+          container.scrollTop = container.scrollHeight;
+
+          // 延迟加载输出
+          setTimeout(() => loadTerminalOutput(currentTerminalAgent), 500);
+        } else {
+          const data = await res.json();
+          showNotification(`Failed to send command: ${data.error || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        showNotification(`Failed to send command: ${e.message}`, 'error');
+      }
+    }
+
+    function handleTerminalKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendTerminalCommand();
       }
     }
 

@@ -7,10 +7,16 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import * as http from 'http';
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import type { DashboardEvent, ServerMessage, ClientMessage } from './types';
+import type { ServerMessage, ClientMessage } from './types';
+import type { TimelineEvent } from '../types/events';
 import { EventStore } from './EventStore';
 import { AgentStateManager } from './AgentStateManager';
 import { WebSocketServer, WebSocket } from 'ws';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * DashboardServer - Manages HTTP + WebSocket server for dashboard
@@ -77,8 +83,16 @@ export class DashboardServer {
     });
 
     // Serve unified dashboard
-    this.app.get('/', (c) => {
-      return c.html(this.getUnifiedDashboardHTML());
+    this.app.get('/', async (c) => {
+      const dashboardPath = join(__dirname, '..', '..', 'public', 'index.html');
+      try {
+        const fs = await import('fs/promises');
+        const content = await fs.readFile(dashboardPath, 'utf-8');
+        return c.html(content);
+      } catch (e: any) {
+        console.error(`Dashboard HTML file not found at ${dashboardPath}:`, e.message);
+        return c.html(this.getFallbackDashboardHTML());
+      }
     });
 
     // API: Get all agents
@@ -235,7 +249,7 @@ export class DashboardServer {
   /**
    * Broadcast message to all connected clients
    */
-  broadcast(message: ServerMessage | { type: 'event'; event: DashboardEvent }): void {
+  broadcast(message: ServerMessage | { type: 'event'; event: TimelineEvent }): void {
     const data = JSON.stringify(message);
     for (const ws of this.webSockets) {
       if (ws.readyState === WebSocket.OPEN) {
@@ -247,7 +261,7 @@ export class DashboardServer {
   /**
    * Broadcast event to all clients
    */
-  broadcastEvent(event: DashboardEvent): void {
+  broadcastEvent(event: TimelineEvent): void {
     this.eventStore.add(event);
     this.broadcast({ type: 'event', event });
   }
@@ -282,22 +296,6 @@ export class DashboardServer {
    */
   getUrl(): string {
     return `http://localhost:${this.port}`;
-  }
-
-  /**
-   * Generate unified dashboard HTML
-   */
-  private getUnifiedDashboardHTML(): string {
-    const fs = require('fs');
-    const path = require('path');
-    const dashboardPath = path.join(process.cwd(), 'public', 'index.html');
-
-    try {
-      return fs.readFileSync(dashboardPath, 'utf-8');
-    } catch (e) {
-      this.api?.logger.warn(`Dashboard HTML file not found at ${dashboardPath}, using fallback`);
-      return this.getFallbackDashboardHTML();
-    }
   }
 
   /**

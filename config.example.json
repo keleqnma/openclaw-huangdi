@@ -1,0 +1,81 @@
+{
+  "$schema": "./schema.json",
+  "port": 3456,
+  "wsPort": 3457,
+  "maxConcurrentAgents": 10,
+  "sandbox": {
+    "mode": "restricted",
+    "workspaceRoot": "./workspaces",
+    "allowedPaths": ["./shared"],
+    "networkAccess": false,
+    "resourceLimits": {
+      "maxCpu": 50,
+      "maxMemory": 512,
+      "maxProcesses": 10
+    },
+    "allowedCommands": ["ls", "cat", "grep", "npm", "node", "echo", "pwd", "dir"],
+    "deniedCommands": ["rm", "dd", "mkfs"]
+  },
+  "agents": [
+    {
+      "id": "researcher-1",
+      "name": "信息搜集助手",
+      "role": "researcher",
+      "command": "echo",
+      "args": ["Researcher agent started"],
+      "cwd": "./workspaces/researcher",
+      "sandbox": {
+        "enabled": true,
+        "mode": "restricted"
+      }
+    },
+    {
+      "id": "coder-1",
+      "name": "编码助手",
+      "role": "coder",
+      "command": "echo",
+      "args": ["Coder agent started"],
+      "cwd": "./workspaces/coder",
+      "sandbox": {
+        "enabled": true,
+        "mode": "restricted"
+      }
+    },
+    {
+      "id": "tester-1",
+      "name": "测试助手",
+      "role": "tester",
+      "command": "echo",
+      "args": ["Tester agent started"],
+      "cwd": "./workspaces/tester",
+      "sandbox": {
+        "enabled": true,
+        "mode": "restricted"
+      }
+    },
+    {
+      "id": "reviewer-1",
+      "name": "代码审查助手",
+      "role": "reviewer",
+      "command": "echo",
+      "args": ["Reviewer agent started"],
+      "cwd": "./workspaces/reviewer"
+    },
+    {
+      "id": "writer-1",
+      "name": "文档编写助手",
+      "role": "writer",
+      "command": "echo",
+      "args": ["Writer agent started"],
+      "cwd": "./workspaces/writer"
+    },
+    {
+      "id": "planner-1",
+      "name": "任务规划助手",
+      "role": "planner",
+      "command": "echo",
+      "args": ["Planner agent started"],
+      "cwd": "./workspaces/planner"
+    }
+  ]
+}

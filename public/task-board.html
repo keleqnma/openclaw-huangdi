@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务看板 - Huangdi Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Refined Dark Theme - matching agent-dashboard.html */
+      --bg-base: #050506;
+      --bg-surface: #0d0d0f;
+      --bg-elevated: #141417;
+      --bg-input: #0a0a0c;
+      --bg-hover: rgba(255, 255, 255, 0.03);
+
+      --accent-primary: #5b6bdc;
+      --accent-primary-hover: #4a59c7;
+      --accent-primary-subtle: rgba(91, 107, 220, 0.08);
+      --accent-primary-glow: rgba(91, 107, 220, 0.25);
+
+      --text-primary: #fafafa;
+      --text-secondary: #a0a0a8;
+      --text-tertiary: #6a6a72;
+      --text-muted: #4a4a50;
+
+      --border-default: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(255, 255, 255, 0.1);
+      --border-active: rgba(91, 107, 220, 0.4);
+
+      --status-pending: #f59e0b;
+      --status-pending-bg: rgba(245, 158, 11, 0.08);
+      --status-pending-border: rgba(245, 158, 11, 0.3);
+
+      --status-claimed: #3b82f6;
+      --status-claimed-bg: rgba(59, 130, 246, 0.08);
+      --status-claimed-border: rgba(59, 130, 246, 0.3);
+
+      --status-in-progress: #06b6d4;
+      --status-in-progress-bg: rgba(6, 182, 212, 0.08);
+      --status-in-progress-border: rgba(6, 182, 212, 0.3);
+
+      --status-completed: #10b981;
+      --status-completed-bg: rgba(16, 185, 129, 0.08);
+      --status-completed-border: rgba(16, 185, 129, 0.3);
+
+      --status-failed: #ef4444;
+      --status-failed-bg: rgba(239, 68, 68, 0.08);
+      --status-failed-border: rgba(239, 68, 68, 0.3);
+
+      --priority-low: #8b5cf6;
+      --priority-normal: #3b82f6;
+      --priority-high: #f59e0b;
+      --priority-urgent: #ef4444;
+
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+      --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --radius-full: 9999px;
+
+      --transition-fast: 120ms cubic-bezier(0.215, 0.61, 0.355, 1);
+      --transition-base: 180ms cubic-bezier(0.215, 0.61, 0.355, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: var(--space-xl);
+    }
+
+    /* Ambient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      right: -50%;
+      bottom: -50%;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(91, 107, 220, 0.04) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 80%, rgba(124, 58, 237, 0.04) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-xl);
+      padding: var(--space-lg) var(--space-xl);
+      background: var(--bg-surface);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-default);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-lg);
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .header-subtitle {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-weight: 500;
+      padding-left: var(--space-md);
+      border-left: 1px solid var(--border-default);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: var(--space-md);
+      align-items: center;
+    }
+
+    /* Stats Grid */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+    }
+
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      transition: all var(--transition-base);
+    }
+
+    .stat-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: var(--space-xs);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Filters */
+    .filters {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-xl);
+      display: flex;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filters select,
+    .filters input {
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      transition: all var(--transition-fast);
+    }
+
+    .filters select:focus,
+    .filters input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+    }
+
+    .filters input {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    /* Task List */
+    .task-list {
+      display: grid;
+      gap: var(--space-md);
+    }
+
+    .task-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      transition: all var(--transition-base);
+      border-left: 3px solid var(--status-claimed);
+    }
+
+    .task-card:hover {
+      border-color: var(--border-hover);
+      transform: translateX(4px);
+      box-shadow: var(--shadow-md);
+      background: var(--bg-elevated);
+    }
+
+    .task-card.status-pending { border-left-color: var(--status-pending); }
+    .task-card.status-claimed { border-left-color: var(--status-claimed); }
+    .task-card.status-in-progress { border-left-color: var(--status-in-progress); }
+    .task-card.status-completed { border-left-color: var(--status-completed); }
+    .task-card.status-failed { border-left-color: var(--status-failed); }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: var(--space-md);
+    }
+
+    .task-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    .task-badge {
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border: 1px solid;
+    }
+
+    .badge-pending {
+      background: var(--status-pending-bg);
+      color: var(--status-pending);
+      border-color: var(--status-pending-border);
+    }
+
+    .badge-claimed {
+      background: var(--status-claimed-bg);
+      color: var(--status-claimed);
+      border-color: var(--status-claimed-border);
+    }
+
+    .badge-in-progress {
+      background: var(--status-in-progress-bg);
+      color: var(--status-in-progress);
+      border-color: var(--status-in-progress-border);
+    }
+
+    .badge-completed {
+      background: var(--status-completed-bg);
+      color: var(--status-completed);
+      border-color: var(--status-completed-border);
+    }
+
+    .badge-failed {
+      background: var(--status-failed-bg);
+      color: var(--status-failed);
+      border-color: var(--status-failed-border);
+    }
+
+    .task-desc {
+      color: var(--text-secondary);
+      margin-bottom: var(--space-md);
+      line-height: 1.5;
+      font-size: 13px;
+    }
+
+    .task-meta {
+      display: flex;
+      gap: var(--space-lg);
+      font-size: 12px;
+      color: var(--text-tertiary);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-md);
+    }
+
+    .task-meta-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+    }
+
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .priority-low {
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--priority-low);
+    }
+
+    .priority-normal {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--priority-normal);
+    }
+
+    .priority-high {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--priority-high);
+    }
+
+    .priority-urgent {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--priority-urgent);
+    }
+
+    /* Progress Bar */
+    .task-progress {
+      margin-top: var(--space-md);
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: var(--bg-input);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-primary), var(--status-in-progress));
+      transition: width var(--transition-base);
+      border-radius: var(--radius-full);
+    }
+
+    .progress-text {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: var(--space-xs);
+      font-weight: 500;
+    }
+
+    /* Task Actions */
+    .task-actions {
+      margin-top: var(--space-md);
+      padding-top: var(--space-md);
+      border-top: 1px solid var(--border-default);
+      display: flex;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      transition: all var(--transition-fast);
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
+      color: white;
+      box-shadow: 0 2px 8px var(--accent-primary-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px var(--accent-primary-glow);
+    }
+
+    .btn-success {
+      background: var(--status-completed);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    .btn-warning {
+      background: var(--status-pending);
+      color: white;
+    }
+
+    .btn-warning:hover {
+      background: #d97706;
+    }
+
+    .btn-danger {
+      background: var(--status-failed);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-default);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-input);
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Chat Section */
+    .chat-section {
+      margin-top: var(--space-md);
+      padding-top: var(--space-md);
+      border-top: 1px solid var(--border-default);
+    }
+
+    .chat-messages {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: var(--space-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .chat-message {
+      padding: var(--space-sm) var(--space-md);
+      background: var(--bg-input);
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      border: 1px solid var(--border-default);
+    }
+
+    .chat-message strong {
+      color: var(--accent-primary);
+      font-weight: 600;
+    }
+
+    .chat-message small {
+      color: var(--text-muted);
+      margin-left: var(--space-sm);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .chat-input {
+      display: flex;
+      gap: var(--space-sm);
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-family: inherit;
+      transition: all var(--transition-fast);
+    }
+
+    .chat-input input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+    }
+
+    /* Alerts */
+    .alerts {
+      background: var(--status-pending-bg);
+      border: 1px solid var(--status-pending-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-md) var(--space-lg);
+      margin-bottom: var(--space-xl);
+      display: none;
+    }
+
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      color: var(--status-pending);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* FAB Button */
+    .new-task-btn {
+      position: fixed;
+      bottom: var(--space-2xl);
+      right: var(--space-2xl);
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
+      color: white;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px var(--accent-primary-glow);
+      transition: all var(--transition-base);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .new-task-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 8px 24px var(--accent-primary-glow);
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .modal.show {
+      display: flex;
+      animation: modalFadeIn 0.2s var(--transition-base);
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-content {
+      background: var(--bg-surface);
+      padding: var(--space-2xl);
+      border-radius: var(--radius-xl);
+      width: 90%;
+      max-width: 540px;
+      border: 1px solid var(--border-default);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .modal-content h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: var(--space-lg);
+      letter-spacing: -0.02em;
+    }
+
+    .form-group {
+      margin-bottom: var(--space-md);
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: var(--space-xs);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      transition: all var(--transition-fast);
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: var(--space-sm);
+      justify-content: flex-end;
+      margin-top: var(--space-lg);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: var(--space-3xl) var(--space-xl);
+      color: var(--text-tertiary);
+    }
+
+    .empty-state-icon {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto var(--space-lg);
+      background: var(--bg-elevated);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border-default);
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      color: var(--text-tertiary);
+      max-width: 320px;
+      margin: 0 auto;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-base);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-hover);
+      border-radius: 4px;
+    }
+
+    /* Spacing variables */
+    :root {
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 20px;
+      --space-2xl: 28px;
+      --space-3xl: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>任务看板</h1>
+        <span class="header-subtitle">Multi-Agent Task Coordination</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="loadTasks()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          刷新
+        </button>
+      </div>
+    </header>
+
+    <!-- Alerts -->
+    <div id="alerts" class="alerts">
+      <div class="alert-item">
+        ⚠️ 有 <span id="overdueCount">0</span> 个任务超时
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats" id="stats"></div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <select id="filter-status">
+        <option value="">所有状态</option>
+        <option value="pending">待认领</option>
+        <option value="claimed">已认领</option>
+        <option value="in-progress">进行中</option>
+        <option value="completed">已完成</option>
+        <option value="failed">失败</option>
+      </select>
+      <select id="filter-priority">
+        <option value="">所有优先级</option>
+        <option value="low">低</option>
+        <option value="normal">普通</option>
+        <option value="high">高</option>
+        <option value="urgent">紧急</option>
+      </select>
+      <input type="text" id="filter-search" placeholder="搜索任务...">
+    </div>
+
+    <!-- Task List -->
+    <div class="task-list" id="task-list">
+      <!-- Tasks rendered by JS -->
+    </div>
+  </div>
+
+  <!-- New Task FAB -->
+  <button class="new-task-btn" onclick="showNewTaskModal()">+</button>
+
+  <!-- New Task Modal -->
+  <div class="modal" id="new-task-modal">
+    <div class="modal-content">
+      <h2>创建新任务</h2>
+      <div class="form-group">
+        <label>标题</label>
+        <input type="text" id="new-title" required placeholder="任务标题">
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <textarea id="new-description" required placeholder="任务描述..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>优先级</label>
+        <select id="new-priority">
+          <option value="low">低</option>
+          <option value="normal" selected>普通</option>
+          <option value="high">高</option>
+          <option value="urgent">紧急</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>指派给 (可选)</label>
+        <input type="text" id="new-assigned-to" placeholder="Agent ID">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="hideNewTaskModal()">取消</button>
+        <button class="btn btn-primary" onclick="createTask()">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '';
+    let currentTasks = [];
+    let currentAgentId = localStorage.getItem('agentId') || 'agent_' + Math.random().toString(36).slice(2, 8);
+
+    if (!localStorage.getItem('agentId')) {
+      localStorage.setItem('agentId', currentAgentId);
+    }
+
+    // Load Stats
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API_BASE}/api/task-stats`);
+        const data = await res.json();
+        const s = data.stats;
+
+        document.getElementById('stats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${s.total || 0}</div>
+            <div class="stat-label">总任务</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--status-pending)">${s.byStatus?.pending || 0}</div>
+            <div class="stat-label">待认领</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--status-in-progress)">${s.byStatus?.['in-progress'] || 0}</div>
+            <div class="stat-label">进行中</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--status-completed)">${s.byStatus?.completed || 0}</div>
+            <div class="stat-label">已完成</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: ${s.overdueCount > 0 ? 'var(--status-failed)' : 'var(--status-completed)'}">
+              ${s.overdueCount || 0}
+            </div>
+            <div class="stat-label">超时</div>
+          </div>
+        `;
+
+        // Show alerts
+        if (s.overdueCount > 0) {
+          document.getElementById('alerts').style.display = 'block';
+          document.getElementById('overdueCount').textContent = s.overdueCount;
+        } else {
+          document.getElementById('alerts').style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      }
+    }
+
+    // Load Tasks
+    async function loadTasks() {
+      try {
+        let url = `${API_BASE}/api/tasks?`;
+        const status = document.getElementById('filter-status').value;
+        const priority = document.getElementById('filter-priority').value;
+        const search = document.getElementById('filter-search').value;
+
+        if (status) url += `&status=${status}`;
+        if (priority) url += `&priority=${priority}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        currentTasks = data.tasks || [];
+        renderTasks(currentTasks);
+      } catch (e) {
+        console.error('Failed to load tasks:', e);
+        document.getElementById('task-list').innerHTML = '<div class="empty-state"><p class="empty-state-text">加载失败</p></div>';
+      }
+    }
+
+    // Render Tasks
+    function renderTasks(tasks) {
+      const container = document.getElementById('task-list');
+
+      if (tasks.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+            <p class="empty-state-text">暂无任务</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = tasks.map(task => {
+        const isClaimer = task.claimedBy === currentAgentId;
+        const canClaim = task.status === 'pending' && !task.assignedTo;
+        const isAssigned = task.assignedTo === currentAgentId;
+
+        return `
+          <div class="task-card status-${task.status}">
+            <div class="task-header">
+              <span class="task-title">${escapeHtml(task.title)}</span>
+              <span class="task-badge badge-${task.status}">${getStatusText(task.status)}</span>
+            </div>
+            <p class="task-desc">${escapeHtml(task.description)}</p>
+            <div class="task-meta">
+              <span class="task-meta-item">
+                <span class="priority-badge priority-${task.priority}">${task.priority}</span>
+              </span>
+              <span class="task-meta-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                ${formatTime(task.createdAt)}
+              </span>
+              <span class="task-meta-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                创建：${escapeHtml(task.createdBy)}
+              </span>
+              ${task.claimedBy ? `
+                <span class="task-meta-item">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                  执行：${escapeHtml(task.claimedBy)}
+                </span>
+              ` : ''}
+              ${task.assignedTo ? `
+                <span class="task-meta-item">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                  指派：${escapeHtml(task.assignedTo)}
+                </span>
+              ` : ''}
+            </div>
+            <div class="task-progress">
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${task.progress}%"></div>
+              </div>
+              <div class="progress-text">${task.progress}% 完成</div>
+            </div>
+            <div class="task-actions">
+              ${(canClaim || isAssigned) && !task.claimedBy ? `
+                <button class="btn btn-primary" onclick="claimTask('${task.id}')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                  认领任务
+                </button>
+              ` : ''}
+              ${isClaimer && task.status === 'claimed' ? `
+                <button class="btn btn-success" onclick="updateStatus('${task.id}', 'in-progress')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  开始执行
+                </button>
+              ` : ''}
+              ${isClaimer && task.status === 'in-progress' ? `
+                <button class="btn btn-success" onclick="updateStatus('${task.id}', 'completed')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  完成任务
+                </button>
+                <button class="btn btn-warning" onclick="releaseTask('${task.id}')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                  释放任务
+                </button>
+              ` : ''}
+              ${task.claimedBy ? `
+                <button class="btn btn-secondary" onclick="toggleChat('${task.id}')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  消息
+                </button>
+              ` : ''}
+            </div>
+            <div class="chat-section" id="chat-${task.id}" style="display: none;">
+              <div class="chat-messages" id="chat-messages-${task.id}"></div>
+              <div class="chat-input">
+                <input type="text" id="chat-input-${task.id}" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendMessage('${task.id}')">
+                <button class="btn btn-primary" onclick="sendMessage('${task.id}')">发送</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Load messages
+      tasks.forEach(task => {
+        if (task.messages) {
+          renderMessages(task.id, task.messages);
+        }
+      });
+    }
+
+    // Render Messages
+    function renderMessages(taskId, messages) {
+      const container = document.getElementById(`chat-messages-${taskId}`);
+      if (!container) return;
+
+      container.innerHTML = messages.map(msg => `
+        <div class="chat-message">
+          <strong>${escapeHtml(msg.fromAgent)}:</strong>
+          ${escapeHtml(msg.content)}
+          <small>${formatTime(msg.timestamp)}</small>
+        </div>
+      `).join('');
+    }
+
+    // Claim Task
+    async function claimTask(taskId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/tasks/${taskId}/claim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: currentAgentId }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('任务认领成功');
+          loadTasks();
+          loadStats();
+        } else {
+          alert('认领失败：' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('认领失败：' + e.message);
+      }
+    }
+
+    // Release Task
+    async function releaseTask(taskId) {
+      if (!confirm('确定要释放这个任务吗？')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/tasks/${taskId}/release`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: currentAgentId }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('任务已释放');
+          loadTasks();
+          loadStats();
+        } else {
+          alert('释放失败：' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('释放失败：' + e.message);
+      }
+    }
+
+    // Update Status
+    async function updateStatus(taskId, status) {
+      try {
+        const res = await fetch(`${API_BASE}/api/tasks/${taskId}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: currentAgentId, status }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('状态已更新');
+          loadTasks();
+          loadStats();
+        } else {
+          alert('更新失败：' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('更新失败：' + e.message);
+      }
+    }
+
+    // Send Message
+    async function sendMessage(taskId) {
+      const input = document.getElementById(`chat-input-${taskId}`);
+      const content = input.value.trim();
+      if (!content) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/tasks/${taskId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromAgent: currentAgentId,
+            content,
+            type: 'comment',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          input.value = '';
+          loadTasks();
+        }
+      } catch (e) {
+        console.error('Failed to send message:', e);
+      }
+    }
+
+    // Toggle Chat
+    function toggleChat(taskId) {
+      const chat = document.getElementById(`chat-${taskId}`);
+      chat.style.display = chat.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Show Modal
+    function showNewTaskModal() {
+      document.getElementById('new-task-modal').classList.add('show');
+    }
+
+    // Hide Modal
+    function hideNewTaskModal() {
+      document.getElementById('new-task-modal').classList.remove('show');
+    }
+
+    // Create Task
+    async function createTask() {
+      const title = document.getElementById('new-title').value.trim();
+      const description = document.getElementById('new-description').value.trim();
+      const priority = document.getElementById('new-priority').value;
+      const assignedTo = document.getElementById('new-assigned-to').value.trim();
+
+      if (!title || !description) {
+        alert('请填写标题和描述');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, priority, assignedTo }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('任务创建成功');
+          hideNewTaskModal();
+          document.getElementById('new-title').value = '';
+          document.getElementById('new-description').value = '';
+          loadTasks();
+          loadStats();
+        } else {
+          alert('创建失败：' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('创建失败：' + e.message);
+      }
+    }
+
+    // Utilities
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = now - date;
+
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
+      if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`;
+
+      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    }
+
+    function getStatusText(status) {
+      const map = {
+        'pending': '待认领',
+        'claimed': '已认领',
+        'in-progress': '进行中',
+        'completed': '已完成',
+        'failed': '失败',
+      };
+      return map[status] || status;
+    }
+
+    // Event Listeners
+    document.getElementById('filter-status').addEventListener('change', loadTasks);
+    document.getElementById('filter-priority').addEventListener('change', loadTasks);
+    document.getElementById('filter-search').addEventListener('input', () => {
+      clearTimeout(window.searchTimeout);
+      window.searchTimeout = setTimeout(loadTasks, 300);
+    });
+
+    // Initialize
+    loadStats();
+    loadTasks();
+
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+      loadStats();
+      loadTasks();
+    }, 30000);
+  </script>
+</body>
+</html>
