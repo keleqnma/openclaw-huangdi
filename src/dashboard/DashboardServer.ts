@@ -18,6 +18,8 @@ import { dirname, join } from 'path';
 import { UnifiedStateManager, getGlobalStateManager } from '../types/UnifiedStateManager';
 import { UnifiedEventStore } from '../types/UnifiedEventStore';
 import type { UnifiedAgentState } from '../types/UnifiedAgentState';
+// 统一 WebSocket 服务
+import { UnifiedWebSocketServer } from '../types/UnifiedWebSocketServer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +38,8 @@ export class DashboardServer {
   // 统一状态管理 (新版本)
   private unifiedState?: UnifiedStateManager;
   private unifiedEvents?: UnifiedEventStore;
+  // 统一 WebSocket 服务
+  private unifiedWs?: UnifiedWebSocketServer;
   private port: number;
   private api: OpenClawPluginApi | null = null;
 
@@ -170,96 +174,39 @@ export class DashboardServer {
         resolve(info.port);
       });
 
+      // 创建统一 WebSocket 服务器并附加到 HTTP 服务器
+      this.unifiedWs = new UnifiedWebSocketServer();
+      this.wsServer = new WebSocketServer({ noServer: true, pingInterval: 30000 });
+
+      this.unifiedWs.attachToHTTPServer(this.wsServer, {
+        getAgents: () => this.agentManager.getAllAgents(),
+        getEvents: () => this.eventStore.getAllEvents(),
+        getEventsSince: (since, agentId) => this.eventStore.getEventsSince(since, agentId),
+        updateReplayState: (update) => this.eventStore.updateReplayState(update),
+        getReplayState: () => this.eventStore.getReplayState(),
+      });
+
       // Upgrade to WebSocket
       this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: import('net').Socket, head: Buffer) => {
         if (req.url === '/ws') {
-          this.handleWebSocketUpgrade(req, socket, head);
+          this.wsServer?.handleUpgrade(req, socket, head, (ws) => {
+            this.webSockets.add(ws);
+            this.api?.logger.debug?.('WebSocket client connected');
+
+            ws.on('close', () => {
+              this.webSockets.delete(ws);
+              this.api?.logger.debug?.('WebSocket client disconnected');
+            });
+
+            ws.on('error', (error: any) => {
+              this.api?.logger.warn(`WebSocket error: ${error?.message || error}`);
+            });
+          });
         } else {
           socket.destroy();
         }
       });
     });
-  }
-
-  /**
-   * Handle WebSocket upgrade
-   */
-  private handleWebSocketUpgrade(
-    req: http.IncomingMessage,
-    socket: import('net').Socket,
-    head: Buffer
-  ): void {
-    this.wsServer?.handleUpgrade(req, socket, head, (ws) => {
-      this.webSockets.add(ws);
-      this.api?.logger.debug?.('WebSocket client connected');
-
-      ws.on('close', () => {
-        this.webSockets.delete(ws);
-        this.api?.logger.debug?.('WebSocket client disconnected');
-      });
-
-      ws.on('message', (data) => {
-        this.handleWebSocketMessage(ws, data);
-      });
-
-      // Send initial sync
-      this.sendSync(ws);
-    });
-  }
-
-  /**
-   * Create WebSocket server
-   */
-  createWebSocketServer(): void {
-    if (!this.httpServer) return;
-
-    this.wsServer = new WebSocketServer({
-      noServer: true,
-      pingInterval: 30000,
-    });
-
-    // Heartbeat
-    setInterval(() => {
-      this.broadcast({ type: 'heartbeat', timestamp: Date.now() });
-    }, 10000);
-  }
-
-  /**
-   * Handle incoming WebSocket message
-   */
-  private handleWebSocketMessage(ws: WebSocket, data: any): void {
-    try {
-      const message: ClientMessage = JSON.parse(data.toString());
-
-      switch (message.type) {
-        case 'fetch_events': {
-          const events = this.eventStore.getEventsSince(
-            message.since,
-            message.agentId
-          );
-          ws.send(JSON.stringify({ type: 'event', events }));
-          break;
-        }
-        case 'replay_control': {
-          this.eventStore.updateReplayState({
-            isPlaying: message.action === 'play',
-            speed: message.speed,
-            currentPosition: message.timestamp || Date.now(),
-          });
-          ws.send(JSON.stringify({
-            type: 'sync',
-            replayState: this.eventStore.getReplayState(),
-          }));
-          break;
-        }
-        case 'fetch_logs': {
-          // TODO: Implement log fetching
-          break;
-        }
-      }
-    } catch (error) {
-      this.api?.logger.warn(`WebSocket message parse error: ${error}`);
-    }
   }
 
   /**
@@ -286,6 +233,12 @@ export class DashboardServer {
         ws.send(data);
       }
     }
+
+    // 同时使用 UnifiedWebSocketServer 广播（如果启用）
+    if (this.unifiedWs && message.type === 'event' && 'event' in message) {
+      const eventMessage = message as { type: 'event'; event: TimelineEvent };
+      this.unifiedWs.broadcastEvent(eventMessage.event);
+    }
   }
 
   /**
@@ -305,8 +258,13 @@ export class DashboardServer {
       this.syncAgentEvent(event);
     }
 
-    // 广播到 WebSocket 客户端
-    this.broadcast({ type: 'event', event });
+    // 广播到 WebSocket 客户端（使用 UnifiedWebSocketServer）
+    if (this.unifiedWs) {
+      this.unifiedWs.broadcastEvent(event);
+    } else {
+      // 向后兼容：使用旧的 broadcast 方法
+      this.broadcast({ type: 'event', event });
+    }
   }
 
   /**
@@ -365,6 +323,11 @@ export class DashboardServer {
         ws.close();
       }
       this.webSockets.clear();
+
+      // Close UnifiedWebSocketServer
+      if (this.unifiedWs) {
+        this.unifiedWs.close();
+      }
 
       // Close WebSocket server
       this.wsServer?.close(() => {

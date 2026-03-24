@@ -1,214 +1,92 @@
 /**
  * WebSocketServer - WebSocket 实时推送服务
  *
- * 推送 Agent 状态更新、终端输出等实时事件
+ * 使用 UnifiedWebSocketServer 作为底层实现，
+ * 提供向后兼容的 API 接口
  */
 
-import { WebSocketServer, WebSocket } from 'ws';
+import { UnifiedWebSocketServer } from '../types/UnifiedWebSocketServer';
 import { TerminalOutputEvent } from '../terminal/types';
 import { AgentRuntime } from '../terminal/types';
 import { Task, TaskMessage, AgentAction, ChatMessage } from '../task/types';
+import { UnifiedAgentState } from '../types/UnifiedAgentState';
 
-interface ClientMessage {
-  type: 'subscribe' | 'unsubscribe' | 'terminal:write' | 'terminal:resize' | 'agent:ping' | 'workspace:refresh' | 'ping';
-  payload: any;
-}
-
-interface ServerMessage {
-  type: string;
-  payload: any;
-}
-
-interface WebSocketClient {
-  ws: any;
-  lastHeartbeat: number;
-  isAlive: boolean;
-}
-
+/**
+ * ApiWebSocketServer - 向后兼容的包装器类
+ *
+ * 使用 UnifiedWebSocketServer 作为底层实现，
+ * 保留原有 API 接口以确保向后兼容性
+ */
 export class ApiWebSocketServer {
-  private wss: any;
-  private clients: Map<any, WebSocketClient> = new Map(); // Track client with heartbeat info
-  private subscriptions: Map<any, Set<string>> = new Map();
+  private unifiedWs: UnifiedWebSocketServer;
   private readonly port: number;
-  private broadcastInterval?: NodeJS.Timeout;
-  private heartbeatInterval?: NodeJS.Timeout;
-  private readonly MAX_CLIENTS = 50; // Maximum concurrent WebSocket connections
-  private readonly HEARTBEAT_INTERVAL = 30000; // 30 seconds heartbeat
-  private readonly HEARTBEAT_TIMEOUT = 10000; // 10 seconds timeout after ping
+  private readonly MAX_CLIENTS = 50;
+  private readonly HEARTBEAT_INTERVAL = 30000;
+  private readonly HEARTBEAT_TIMEOUT = 10000;
 
-  constructor(port: number) {
+  constructor(port: number = 3457) {
     this.port = port;
-    this.wss = new WebSocketServer({ port });
-    this.setup();
-    this.startPeriodicBroadcast();
-    this.startHeartbeatCheck();
-  }
-
-  /**
-   * Start heartbeat check to detect zombie connections
-   */
-  private startHeartbeatCheck() {
-    this.heartbeatInterval = setInterval(() => {
-      this.clients.forEach((client, ws) => {
-        if (!client.isAlive) {
-          // Client didn't respond to ping, terminate connection
-          console.debug(`Terminating zombie connection: ${ws._socket?.remoteAddress}`);
-          ws.terminate();
-          this.clients.delete(ws);
-          this.subscriptions.delete(ws);
-          return;
-        }
-
-        // Mark as not alive and send ping
-        client.isAlive = false;
-        client.lastHeartbeat = Date.now();
-        ws.ping?.();
-      });
-    }, this.HEARTBEAT_INTERVAL);
-  }
-
-  /**
-   * Start periodic broadcast (for real-time status updates)
-   */
-  private startPeriodicBroadcast() {
-    // Broadcast heartbeat every 2 seconds
-    this.broadcastInterval = setInterval(() => {
-      this.broadcast({ type: 'agent:heartbeat', payload: { timestamp: Date.now() } });
-    }, 2000);
-  }
-
-  private setup() {
-    this.wss.on('connection', (ws: any) => {
-      // Check maximum connections
-      if (this.clients.size >= this.MAX_CLIENTS) {
-        ws.send(JSON.stringify({
-          type: 'error',
-          payload: { message: `Maximum connections (${this.MAX_CLIENTS}) reached. Try again later.` },
-        }));
-        ws.close(1013, 'Too many connections');
-        return;
-      }
-
-      // Add client with heartbeat tracking
-      const client: WebSocketClient = {
-        ws,
-        lastHeartbeat: Date.now(),
-        isAlive: true,
-      };
-      this.clients.set(ws, client);
-      this.subscriptions.set(ws, new Set());
-
-      // Send welcome message
-      ws.send(JSON.stringify({
-        type: 'connected',
-        payload: {
-          message: 'Connected to Multi-Agent WebSocket Server',
-          clientId: ws._socket?.remoteAddress || 'unknown',
-          serverTime: Date.now(),
-        },
-      }));
-
-      ws.on('message', (data: Buffer) => {
-        try {
-          const message: ClientMessage = JSON.parse(data.toString());
-
-          // Handle ping message for heartbeat
-          if (message.type === 'ping') {
-            ws.send(JSON.stringify({ type: 'pong', payload: { timestamp: Date.now() } }));
-            const client = this.clients.get(ws);
-            if (client) {
-              client.isAlive = true;
-              client.lastHeartbeat = Date.now();
-            }
-            return;
-          }
-
-          this.handleMessage(ws, message);
-        } catch {
-          ws.send(JSON.stringify({
-            type: 'error',
-            payload: { message: 'Invalid message format' },
-          }));
-        }
-      });
-
-      ws.on('pong', () => {
-        const client = this.clients.get(ws);
-        if (client) {
-          client.isAlive = true;
-          client.lastHeartbeat = Date.now();
-        }
-      });
-
-      ws.on('close', () => {
-        this.clients.delete(ws);
-        this.subscriptions.delete(ws);
-      });
-
-      ws.on('error', (error: any) => {
-        console.debug(`WebSocket error: ${error?.message || error}`);
-      });
+    this.unifiedWs = new UnifiedWebSocketServer({
+      maxClients: 100,
+      heartbeatInterval: this.HEARTBEAT_INTERVAL,
+      heartbeatTimeout: this.HEARTBEAT_TIMEOUT,
+      broadcastInterval: 2000,
     });
-
-    this.wss.on('error', (error: any) => {
-      console.warn(`WebSocket server error: ${error?.message || error}`);
-    });
-  }
-
-  private handleMessage(ws: any, message: ClientMessage) {
-    switch (message.type) {
-      case 'subscribe':
-        this.subscriptions.get(ws)?.add(message.payload.channel);
-        ws.send(JSON.stringify({
-          type: 'subscribed',
-          payload: { channel: message.payload.channel },
-        }));
-        break;
-
-      case 'unsubscribe':
-        this.subscriptions.get(ws)?.delete(message.payload.channel);
-        ws.send(JSON.stringify({
-          type: 'unsubscribed',
-          payload: { channel: message.payload.channel },
-        }));
-        break;
-
-      default:
-        ws.send(JSON.stringify({
-          type: 'error',
-          payload: { message: `Unknown message type: ${message.type}` },
-        }));
-    }
+    this.unifiedWs.start(port);
   }
 
   /**
    * 广播 Agent 状态更新
    */
   broadcastAgentUpdate(agent: AgentRuntime): void {
-    this.broadcast({
-      type: 'agent:update',
-      payload: { agent },
-    }, 'agent:' + agent.id);
+    // 转换为 UnifiedAgentState 格式
+    const unifiedAgent: UnifiedAgentState = {
+      id: agent.id,
+      role: agent.config?.role || 'planner',
+      status: this.convertStatus(agent.status),
+      currentTaskId: agent.currentTask?.id,
+      taskDescription: agent.currentTask?.description,
+      lastEventAt: Date.now(),
+      actionCount: 0,
+      memoryIds: [],
+      context: {
+        global: [],
+        team: [],
+        local: [],
+      },
+      config: {
+        systemPrompt: (agent.config as any)?.systemPrompt,
+        customInstructions: (agent.config as any)?.customInstructions,
+        memory: (agent.config as any)?.memory,
+      },
+      startedAt: agent.startedAt || Date.now(),
+    };
+    this.unifiedWs.broadcastAgentUpdate(unifiedAgent);
   }
 
   /**
    * 广播终端输出
    */
   broadcastTerminalOutput(event: TerminalOutputEvent): void {
-    this.broadcast({
-      type: 'terminal:output',
-      payload: event,
-    }, 'terminal:' + event.sessionId);
+    // 转换为统一的 TerminalOutputEvent 格式
+    this.unifiedWs.broadcastTerminalOutput({
+      sessionId: event.sessionId,
+      output: (event as any).data || (event as any).content || '',
+      timestamp: event.timestamp || Date.now(),
+    });
   }
 
   /**
    * 广播任务事件
    */
   broadcastTaskEvent(eventType: 'started' | 'completed' | 'failed', task: any): void {
-    this.broadcast({
-      type: `task:${eventType}`,
-      payload: { task },
-    }, 'tasks');
+    // 映射事件类型
+    const typeMap: Record<string, 'created' | 'updated' | 'completed' | 'failed'> = {
+      'started': 'updated',
+      'completed': 'completed',
+      'failed': 'failed',
+    };
+    this.unifiedWs.broadcastTaskEvent(typeMap[eventType] || 'updated', task);
   }
 
   /**
@@ -218,27 +96,22 @@ export class ApiWebSocketServer {
     eventType: 'task:created' | 'task:claimed' | 'task:released' | 'task:updated' | 'task:completed',
     task: Task
   ): void {
-    this.broadcast({
-      type: 'taskboard:update',
-      payload: { eventType, task },
-    }, 'taskboard');
+    this.unifiedWs.broadcastTaskBoardUpdate(eventType, task);
   }
 
   /**
    * 广播任务消息
    */
   broadcastTaskBoardMessage(task: Task, message: TaskMessage): void {
-    this.broadcast({
-      type: 'taskboard:message',
-      payload: { taskId: task.id, message },
-    }, 'taskboard');
+    this.unifiedWs.broadcastTaskBoardMessage(task.id, message);
   }
 
   /**
    * 广播任务告警
    */
   broadcastTaskBoardAlert(alertType: 'overdue' | 'stalled', task: Task): void {
-    this.broadcast({
+    // 使用统一 WebSocket 广播
+    this.unifiedWs.broadcast({
       type: 'taskboard:alert',
       payload: { alertType, task },
     }, 'taskboard');
@@ -248,126 +121,47 @@ export class ApiWebSocketServer {
    * 广播 Agent 动作
    */
   broadcastAgentAction(action: AgentAction): void {
-    this.broadcast({
-      type: 'agent:action',
-      payload: { action },
-    }, 'agent:' + action.agentId);
+    this.unifiedWs.broadcastAgentAction(
+      action.agentId,
+      action.actionType,
+      action.payload
+    );
   }
 
   /**
    * 广播 Agent 思考状态
    */
   broadcastThinking(agentId: string, thought: string, taskId?: string): void {
-    this.broadcast({
-      type: 'agent:thinking',
-      payload: { agentId, thought, taskId, timestamp: Date.now() },
-    }, 'agent:' + agentId);
+    this.unifiedWs.broadcastAgentThinking(agentId, thought, taskId);
   }
 
   /**
    * 广播 Agent 状态变化
    */
-  broadcastAgentStatus(agentId: string, status: 'thinking' | 'working' | 'idle' | 'error', detail?: string): void {
-    this.broadcast({
-      type: 'agent:status',
-      payload: { agentId, status, detail, timestamp: Date.now() },
-    }, 'agent:' + agentId);
+  broadcastAgentStatus(
+    agentId: string,
+    status: 'thinking' | 'working' | 'idle' | 'error' | 'running' | 'executing',
+    detail?: string
+  ): void {
+    this.unifiedWs.broadcastAgentStatus(agentId, status, detail);
   }
 
   /**
    * 广播聊天消息
    */
   broadcastChatMessage(message: ChatMessage): void {
-    // 私聊：只发送给特定接收者
-    if (message.to) {
-      this.broadcast({
-        type: 'chat:message',
-        payload: { message },
-      }, 'chat:' + message.to);
-    }
-    // 群聊：发送给所有订阅者
-    this.broadcast({
-      type: 'chat:message',
-      payload: { message },
-    }, 'chat:global');
+    this.unifiedWs.broadcastChatMessage(message);
   }
 
   /**
-   * Broadcast to subscribed clients
-   */
-  private broadcast(message: ServerMessage, channel?: string): void {
-    const data = JSON.stringify(message);
-    const deadClients: any[] = [];
-
-    for (const [ws, client] of this.clients.entries()) {
-      if (client.isAlive && ws.readyState === WebSocket.OPEN) {
-        if (!channel || this.subscriptions.get(ws)?.has(channel)) {
-          try {
-            ws.send(data);
-          } catch (error) {
-            // Mark client as dead for cleanup
-            deadClients.push(ws);
-          }
-        }
-      } else if (ws.readyState !== WebSocket.OPEN) {
-        deadClients.push(ws);
-      }
-    }
-
-    // Cleanup dead clients
-    for (const ws of deadClients) {
-      this.clients.delete(ws);
-      this.subscriptions.delete(ws);
-    }
-  }
-
-  /**
-   * Get number of connected clients
+   * 获取客户端数量
    */
   getClientCount(): number {
-    return this.clients.size;
+    return this.unifiedWs.getClientCount();
   }
 
   /**
-   * Get connected clients info
-   */
-  getConnectedClients(): Array<{ address: string; lastHeartbeat: number; isAlive: boolean }> {
-    const clients: Array<{ address: string; lastHeartbeat: number; isAlive: boolean }> = [];
-    for (const [ws, client] of this.clients.entries()) {
-      clients.push({
-        address: ws._socket?.remoteAddress || 'unknown',
-        lastHeartbeat: client.lastHeartbeat,
-        isAlive: client.isAlive,
-      });
-    }
-    return clients;
-  }
-
-  /**
-   * Close the server
-   */
-  close(): void {
-    // Stop heartbeat check
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-
-    // Stop periodic broadcast
-    if (this.broadcastInterval) {
-      clearInterval(this.broadcastInterval);
-    }
-
-    // Close all client connections
-    for (const client of this.clients.keys()) {
-      client.close();
-    }
-    this.clients.clear();
-    this.subscriptions.clear();
-    this.wss.close();
-  }
-
-  /**
-   * Get server info
+   * 获取服务器信息
    */
   getInfo(): {
     port: number;
@@ -375,11 +169,35 @@ export class ApiWebSocketServer {
     maxClients: number;
     heartbeatInterval: number;
   } {
+    const info = this.unifiedWs.getInfo();
     return {
       port: this.port,
-      clients: this.getClientCount(),
+      clients: info.clients,
       maxClients: this.MAX_CLIENTS,
       heartbeatInterval: this.HEARTBEAT_INTERVAL,
     };
+  }
+
+  /**
+   * 关闭服务器
+   */
+  close(): void {
+    this.unifiedWs.close();
+  }
+
+  /**
+   * 转换状态
+   */
+  private convertStatus(status: string): any {
+    const statusMap: Record<string, any> = {
+      'idle': 'idle',
+      'thinking': 'thinking',
+      'working': 'executing',
+      'running': 'executing',
+      'executing': 'executing',
+      'error': 'error',
+      'completed': 'terminated',
+    };
+    return statusMap[status] || 'idle';
   }
 }

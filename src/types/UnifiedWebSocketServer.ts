@@ -11,8 +11,37 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { TimelineEvent } from './events';
 import type { AgentState, ReplayState } from '../dashboard/types';
+import type { UnifiedAgentState } from './UnifiedAgentState';
 import type { IncomingMessage } from 'http';
 import type { Duplex } from 'stream';
+
+// 任务类型 (从 task/types 导入)
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  [key: string]: any;
+}
+
+// 聊天消息类型
+export interface ChatMessage {
+  id: string;
+  from: string;
+  to?: string;
+  content: string;
+  timestamp: number;
+  isFromUser: boolean;
+  relatedTaskId?: string;
+}
+
+// 终端输出事件类型
+export interface TerminalOutputEvent {
+  sessionId: string;
+  output: string;
+  timestamp: number;
+}
 
 interface ClientMessage {
   // Dashboard 消息类型
@@ -368,6 +397,107 @@ export class UnifiedWebSocketServer {
         payload: { event },
       }, `task:${event.taskId}`);
     }
+  }
+
+  /**
+   * 广播 Agent 状态更新
+   */
+  broadcastAgentUpdate(agent: UnifiedAgentState): void {
+    this.broadcast({
+      type: 'agent:update',
+      payload: { agent },
+    }, `agent:${agent.id}`);
+  }
+
+  /**
+   * 广播 Agent 状态变化
+   */
+  broadcastAgentStatus(agentId: string, status: string, detail?: string): void {
+    this.broadcast({
+      type: 'agent:status',
+      payload: { agentId, status, detail, timestamp: Date.now() },
+    }, `agent:${agentId}`);
+  }
+
+  /**
+   * 广播 Agent 动作
+   */
+  broadcastAgentAction(agentId: string, actionType: string, payload?: any): void {
+    this.broadcast({
+      type: 'agent:action',
+      payload: { agentId, actionType, payload, timestamp: Date.now() },
+    }, `agent:${agentId}`);
+  }
+
+  /**
+   * 广播 Agent 思考状态
+   */
+  broadcastAgentThinking(agentId: string, thought: string, taskId?: string): void {
+    this.broadcast({
+      type: 'agent:thinking',
+      payload: { agentId, thought, taskId, timestamp: Date.now() },
+    }, `agent:${agentId}`);
+  }
+
+  /**
+   * 广播任务事件
+   */
+  broadcastTaskEvent(eventType: 'created' | 'updated' | 'completed' | 'failed', task: Task): void {
+    this.broadcast({
+      type: `task:${eventType}`,
+      payload: { task },
+    }, 'tasks');
+  }
+
+  /**
+   * 广播任务看板更新
+   */
+  broadcastTaskBoardUpdate(
+    eventType: 'task:created' | 'task:claimed' | 'task:released' | 'task:updated' | 'task:completed',
+    task: Task
+  ): void {
+    this.broadcast({
+      type: 'taskboard:update',
+      payload: { eventType, task },
+    }, 'taskboard');
+  }
+
+  /**
+   * 广播任务消息
+   */
+  broadcastTaskBoardMessage(taskId: string, message: any): void {
+    this.broadcast({
+      type: 'taskboard:message',
+      payload: { taskId, message },
+    }, 'taskboard');
+  }
+
+  /**
+   * 广播聊天消息
+   */
+  broadcastChatMessage(message: ChatMessage): void {
+    // 私聊：只发送给特定接收者
+    if (message.to) {
+      this.broadcast({
+        type: 'chat:message',
+        payload: { message },
+      }, `chat:${message.to}`);
+    }
+    // 群聊：发送给所有订阅者
+    this.broadcast({
+      type: 'chat:message',
+      payload: { message },
+    }, 'chat:global');
+  }
+
+  /**
+   * 广播终端输出
+   */
+  broadcastTerminalOutput(event: TerminalOutputEvent): void {
+    this.broadcast({
+      type: 'terminal:output',
+      payload: event,
+    }, `terminal:${event.sessionId}`);
   }
 
   /**

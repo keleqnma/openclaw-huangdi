@@ -52,7 +52,8 @@ describe('ApiWebSocketServer', () => {
           messages.push(message);
 
           if (message.type === 'connected') {
-            expect(message.payload.message).toBe('Connected to Multi-Agent WebSocket Server');
+            // Connected message format from UnifiedWebSocketServer
+            expect(message.payload.message).toContain('Connected');
             ws.close();
             resolve(true);
           }
@@ -321,7 +322,7 @@ describe('ApiWebSocketServer', () => {
             server.broadcastTaskEvent('started', mockTask);
           }
 
-          if (message.type === 'task:started' && subscribed) {
+          if (message.type === 'task:updated' && subscribed) {
             expect(message.payload.task.id).toBe('task-1');
             ws.close();
             resolve(true);
@@ -529,8 +530,8 @@ describe('ApiWebSocketServer', () => {
           }
 
           if (message.type === 'agent:action' && subscribed) {
-            expect(message.payload.action.agentId).toBe('test-agent');
-            expect(message.payload.action.actionType).toBe('command_exec');
+            expect(message.payload.agentId).toBe('test-agent');
+            expect(message.payload.actionType).toBe('command_exec');
             ws.close();
             resolve(true);
           }
