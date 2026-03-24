@@ -3,11 +3,16 @@
  *
  * 统一记录和追踪所有 Agent 的操作
  * 支持实时查询和 WebSocket 推送
+ *
+ * 注：ActionLogger 现在使用 UnifiedEventStore 作为底层存储，
+ * 保持向后兼容性的同时实现数据统一
  */
 
 import { EventEmitter } from 'events';
 import { AgentAction, AgentActionType } from './types';
 import { TimelineEvent, createTimelineEventFromAction } from '../types/events';
+import { UnifiedEventStore } from '../types/UnifiedEventStore';
+import { getGlobalStateManager } from '../types/UnifiedStateManager';
 
 export class ActionLogger extends EventEmitter {
   private actions: Map<string, AgentAction> = new Map(); // id -> action
@@ -16,6 +21,17 @@ export class ActionLogger extends EventEmitter {
   private timelineEvents: Map<string, TimelineEvent> = new Map(); // id -> timelineEvent
   private maxHistory: number = 10000;
   private actionCounter: number = 0;
+
+  // 统一存储 (可选，用于数据同步)
+  private unifiedEvents?: UnifiedEventStore;
+  private unifiedState = getGlobalStateManager();
+
+  constructor(useUnified: boolean = true) {
+    super();
+    if (useUnified) {
+      this.unifiedEvents = new UnifiedEventStore(this.maxHistory);
+    }
+  }
 
   /**
    * 生成动作 ID
@@ -69,6 +85,14 @@ export class ActionLogger extends EventEmitter {
       }
       this.taskActions.get(action.taskId)!.push(id);
     }
+
+    // 同步到统一事件存储
+    if (this.unifiedEvents) {
+      this.unifiedEvents.add(timelineEvent);
+    }
+
+    // 同步到统一状态管理器 (增加动作计数)
+    this.unifiedState?.incrementActionCount(action.agentId);
 
     // 触发事件（用于 WebSocket 推送）
     this.emit('action', fullAction);

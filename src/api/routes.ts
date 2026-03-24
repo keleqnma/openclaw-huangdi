@@ -13,6 +13,9 @@ import { MonitorAgent } from '../task/MonitorAgent';
 import { ActionLogger } from '../task/ActionLogger';
 import { ChatManager } from '../task/ChatManager';
 import { serveStatic } from '@hono/node-server/serve-static';
+// 统一状态管理
+import { getGlobalStateManager } from '../types/UnifiedStateManager';
+import { UnifiedEventStore } from '../types/UnifiedEventStore';
 
 export function createRoutes(
   orchestrator: AgentOrchestrator,
@@ -21,7 +24,8 @@ export function createRoutes(
   taskBoard?: TaskBoardManager,
   monitorAgent?: MonitorAgent,
   actionLogger?: ActionLogger,
-  chatManager?: ChatManager
+  chatManager?: ChatManager,
+  unifiedEvents?: UnifiedEventStore
 ) {
   const app = new Hono();
 
@@ -541,6 +545,82 @@ export function createRoutes(
       return c.json({ messages });
     });
   }
+
+  // ===== 统一状态管理器路由 =====
+  const unifiedState = getGlobalStateManager();
+
+  // 获取所有 Agent 状态
+  app.get('/api/unified/agents', (c) => {
+    const agents = unifiedState.getAllAgents();
+    return c.json({ agents });
+  });
+
+  // 获取统计信息
+  app.get('/api/unified/stats', (c) => {
+    const stats = unifiedState.getStats();
+    return c.json({ stats });
+  });
+
+  // 查询 Agent (支持过滤)
+  app.get('/api/unified/agents/query', (c) => {
+    const status = c.req.query('status');
+    const role = c.req.query('role');
+    const search = c.req.query('search');
+
+    const options: any = {};
+    if (status) options.status = status.split(',');
+    if (role) options.role = role.split(',');
+    if (search) options.search = search;
+
+    const agents = unifiedState.queryAgents(options);
+    return c.json({ agents });
+  });
+
+  // 获取事件 (支持过滤)
+  app.get('/api/unified/events', (c) => {
+    const since = c.req.query('since') ? parseInt(c.req.query('since')!) : undefined;
+    const agentId = c.req.query('agentId');
+    const taskId = c.req.query('taskId');
+    const limit = parseInt(c.req.query('limit') || '100');
+
+    let events = unifiedEvents?.getAllEvents() || unifiedState.getEvents(since, limit);
+
+    // 过滤
+    if (agentId) {
+      events = events.filter(e => e.agentId === agentId);
+    }
+    if (taskId) {
+      events = events.filter(e => e.taskId === taskId);
+    }
+
+    return c.json({ events });
+  });
+
+  // 获取 Agent 相关事件
+  app.get('/api/unified/agents/:id/events', (c) => {
+    const limit = parseInt(c.req.query('limit') || '50');
+    const events = unifiedState.getEventsByAgent(c.req.param('id'), limit);
+    return c.json({ events });
+  });
+
+  // 获取快照列表
+  app.get('/api/unified/snapshots', (c) => {
+    const snapshots = unifiedState.getSnapshots();
+    return c.json({ snapshots });
+  });
+
+  // 创建快照
+  app.post('/api/unified/snapshots', (c) => {
+    const snapshot = unifiedState.createSnapshot();
+    return c.json({
+      success: true,
+      snapshot: {
+        timestamp: snapshot.timestamp,
+        eventCount: snapshot.eventCount,
+        agentCount: snapshot.agents.size,
+      },
+    });
+  });
 
   // ===== Workspace 路由 =====
   // 获取 Agent 的 workspace 文件树

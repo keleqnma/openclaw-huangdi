@@ -51,6 +51,13 @@ export type { AgentIdMapping } from './AgentIdMapper';
 export { UnifiedEventStore } from './UnifiedEventStore';
 export type { UnifiedEventStoreStats } from './UnifiedEventStore';
 
+// 统一状态管理器
+export { UnifiedStateManager, getGlobalStateManager, resetGlobalStateManager } from './UnifiedStateManager';
+export type { StateManagerConfig, StateManagerEvents } from './UnifiedStateManager';
+
+// 统一 Agent 状态
+export type { UnifiedAgentState, AgentExecutionStatus, StateSnapshot, StateQueryOptions, AgentStats } from './UnifiedAgentState';
+
 // 统一 WebSocket 服务
 export { UnifiedWebSocketServer } from './UnifiedWebSocketServer';
 export type { UnifiedWebSocketServerConfig, WebSocketClient as UnifiedWebSocketClient } from './UnifiedWebSocketServer';

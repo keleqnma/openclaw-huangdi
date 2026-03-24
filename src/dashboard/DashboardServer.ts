@@ -14,6 +14,10 @@ import { AgentStateManager } from './AgentStateManager';
 import { WebSocketServer, WebSocket } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+// 统一状态管理
+import { UnifiedStateManager, getGlobalStateManager } from '../types/UnifiedStateManager';
+import { UnifiedEventStore } from '../types/UnifiedEventStore';
+import type { UnifiedAgentState } from '../types/UnifiedAgentState';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,19 +30,31 @@ export class DashboardServer {
   private httpServer?: import('http').Server | import('http2').Http2Server;
   private wsServer?: WebSocketServer;
   private webSockets: Set<WebSocket> = new Set();
+  // 旧版本状态管理 (用于向后兼容)
   private eventStore: EventStore;
   private agentManager: AgentStateManager;
+  // 统一状态管理 (新版本)
+  private unifiedState?: UnifiedStateManager;
+  private unifiedEvents?: UnifiedEventStore;
   private port: number;
   private api: OpenClawPluginApi | null = null;
 
   constructor(
     port: number = 3456,
     maxEvents: number = 1000,
-    pollInterval: number = 2000
+    pollInterval: number = 2000,
+    useUnified: boolean = true
   ) {
     this.port = port;
     this.eventStore = new EventStore(maxEvents);
     this.agentManager = new AgentStateManager(pollInterval);
+
+    // 启用统一状态管理
+    if (useUnified) {
+      this.unifiedState = getGlobalStateManager();
+      this.unifiedEvents = new UnifiedEventStore(maxEvents * 10);
+    }
+
     this.app = new Hono();
     this.setupRoutes();
   }
@@ -63,6 +79,20 @@ export class DashboardServer {
    */
   getEventStore(): EventStore {
     return this.eventStore;
+  }
+
+  /**
+   * Get unified state manager (if enabled)
+   */
+  getUnifiedState(): UnifiedStateManager | undefined {
+    return this.unifiedState;
+  }
+
+  /**
+   * Get unified event store (if enabled)
+   */
+  getUnifiedEvents(): UnifiedEventStore | undefined {
+    return this.unifiedEvents;
   }
 
   /**
@@ -262,8 +292,64 @@ export class DashboardServer {
    * Broadcast event to all clients
    */
   broadcastEvent(event: TimelineEvent): void {
+    // 写入旧事件存储
     this.eventStore.add(event);
+
+    // 写入统一事件存储 (如果启用)
+    if (this.unifiedEvents) {
+      this.unifiedEvents.add(event);
+    }
+
+    // 同步到统一状态管理器 (如果是 Agent 相关事件)
+    if (this.unifiedState && event.agentId) {
+      this.syncAgentEvent(event);
+    }
+
+    // 广播到 WebSocket 客户端
     this.broadcast({ type: 'event', event });
+  }
+
+  /**
+   * Sync event to UnifiedStateManager
+   */
+  private syncAgentEvent(event: TimelineEvent): void {
+    // 此方法调用前已确保 event.agentId 存在
+    const agentId = event.agentId!;
+
+    switch (event.type) {
+      case 'agent:created': {
+        // 从事件详情提取 Agent 信息
+        const role = event.details?.role || 'planner';
+        this.unifiedState?.createAgent({
+          id: agentId,
+          role,
+          status: 'spawning',
+          taskDescription: event.details?.task,
+          config: {},
+        });
+        break;
+      }
+
+      case 'agent:status': {
+        const newStatus = event.details?.status;
+        if (newStatus) {
+          this.unifiedState?.transitionState(agentId, newStatus, event.details?.reason);
+        }
+        break;
+      }
+
+      case 'agent:action': {
+        // 增加动作计数
+        this.unifiedState?.incrementActionCount(agentId);
+        break;
+      }
+
+      case 'agent:thinking': {
+        // 思考中状态
+        this.unifiedState?.transitionState(agentId, 'thinking');
+        break;
+      }
+    }
   }
 
   /**
